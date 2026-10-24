@@ -33,3 +33,8 @@ output/.DS_Store
 # IDEs
 .idea/
 .vscode/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/

@@ -141,6 +141,10 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). The Vite development server proxies `/api` requests to FastAPI on port `8000`.
 
+### 4. Run the native iOS application
+
+On macOS with Xcode 16 or newer, open `ios/ProvenanceLabIOS.xcodeproj`, select an iPhone Simulator, and run the `ProvenanceLab` scheme. The app uses `http://127.0.0.1:8000` by default in Simulator and exposes a Server Settings screen for LAN or production HTTPS deployments. See [`ios/README.md`](ios/README.md) for signing and release notes.
+
 ## Use the application
 
 1. Open **New analysis** and choose **SMILES** or **Photo or screenshot**.
@@ -225,6 +229,9 @@ curl -X POST http://localhost:8000/api/analyze \
 │       ├── pages/         # analysis and results routes
 │       ├── schemas/       # TypeScript API contracts
 │       └── styles/        # responsive application design system
+├── ios/
+│   ├── ProvenanceLab/     # native SwiftUI application sources and assets
+│   └── ProvenanceLabIOS.xcodeproj
 └── docs/                  # design system, concepts, and verified screenshots
 ```
 
