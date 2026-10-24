@@ -36,9 +36,15 @@ class SnapshotSpec:
 class PassageSearchHit:
     passage_id: str
     snapshot_id: str
+    paper_id: str
     article_title: str | None
     section_name: str
+    paragraph_number: int | None
+    sentence_start: int | None
+    sentence_end: int | None
     passage_text: str
+    passage_sha256: str
+    retraction_status: str
     snippet: str
     bm25_score: float
     priority: int
@@ -644,6 +650,38 @@ class EvidenceStore:
             parameters,
         ).fetchall()
 
+    def run_record_search(
+        self,
+        *,
+        snapshot_id: str,
+        molecule_inchikey: str,
+        property_key: str | None = None,
+        record_ids: tuple[str, ...] = (),
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        if not 1 <= limit <= 100:
+            raise EvidenceStoreError("run-record search limit must be between 1 and 100")
+        clauses = ["snapshot_id = ?", "molecule_inchikey = ?"]
+        parameters: list[Any] = [snapshot_id, molecule_inchikey]
+        if property_key is not None:
+            clauses.append("property_key = ?")
+            parameters.append(property_key)
+        if record_ids:
+            placeholders = ", ".join("?" for _ in record_ids)
+            clauses.append(f"record_id IN ({placeholders})")
+            parameters.extend(record_ids)
+        parameters.append(limit)
+        return self._connection.execute(
+            f"""
+            SELECT *
+            FROM run_records
+            WHERE {' AND '.join(clauses)}
+            ORDER BY analysis_id, property_key, record_id
+            LIMIT ?
+            """,
+            parameters,
+        ).fetchall()
+
     def search_passages(
         self,
         *,
@@ -658,14 +696,20 @@ class EvidenceStore:
         rows = self._connection.execute(
             """
             SELECT passages_fts.passage_id, passages_fts.snapshot_id,
-                   passages_fts.article_title, passages_fts.section_name,
-                   passages_fts.passage_text, passages.priority,
+                   passages.paper_id, passages_fts.article_title,
+                   passages_fts.section_name, passages.paragraph_number,
+                   passages.sentence_start, passages.sentence_end,
+                   passages_fts.passage_text, passages.passage_sha256,
+                   papers.retraction_status, passages.priority,
                    snippet(passages_fts, 4, '<mark>', '</mark>', ' … ', 24) AS snippet,
                    bm25(passages_fts, 0.0, 0.0, 1.0, 1.5, 2.0) AS bm25_score
             FROM passages_fts
             JOIN passages
               ON passages.snapshot_id = passages_fts.snapshot_id
              AND passages.passage_id = passages_fts.passage_id
+            JOIN papers
+              ON papers.snapshot_id = passages.snapshot_id
+             AND papers.paper_id = passages.paper_id
             WHERE passages_fts MATCH ? AND passages_fts.snapshot_id = ?
             ORDER BY passages.priority, bm25_score, passages_fts.passage_id
             LIMIT ?
@@ -676,9 +720,15 @@ class EvidenceStore:
             PassageSearchHit(
                 passage_id=row["passage_id"],
                 snapshot_id=row["snapshot_id"],
+                paper_id=row["paper_id"],
                 article_title=row["article_title"],
                 section_name=row["section_name"],
+                paragraph_number=row["paragraph_number"],
+                sentence_start=row["sentence_start"],
+                sentence_end=row["sentence_end"],
                 passage_text=row["passage_text"],
+                passage_sha256=row["passage_sha256"],
+                retraction_status=row["retraction_status"],
                 snippet=row["snippet"],
                 bm25_score=row["bm25_score"],
                 priority=row["priority"],
