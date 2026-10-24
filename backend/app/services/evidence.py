@@ -9,6 +9,7 @@ from app.models.analysis import PropertyObservation, ResultStatus
 from app.services.pubchem_questions import (
     FrozenPubChemClient,
     FrozenPubChemCompound,
+    PubChemCompoundNotFoundError,
     PubChemQuestionError,
 )
 
@@ -21,6 +22,7 @@ _DEFAULT_BUNDLED_SNAPSHOTS = _PROJECT_ROOT / "data/snapshots/pubchem-compounds"
 class PropertyEvidenceResolution:
     snapshot_id: str
     snapshot_scope: str
+    missing_status: ResultStatus = ResultStatus.NOT_AVAILABLE
     record: FrozenPubChemCompound | None = None
     reason_code: str | None = None
     reason: str | None = None
@@ -82,6 +84,19 @@ def resolve_property_evidence(
 
     try:
         record = (client or _pubchem_client()).get_by_inchikey(inchikey)
+    except PubChemCompoundNotFoundError:
+        return PropertyEvidenceResolution(
+            snapshot_id="pubchem-no-reference-match",
+            snapshot_scope=(
+                "PubChem returned no CID for the standardized structure's exact InChIKey."
+            ),
+            missing_status=ResultStatus.NO_REFERENCE_MATCH,
+            reason_code="PUBCHEM_NO_CID_FOR_INCHIKEY",
+            reason=(
+                "No PubChem CID matches this exact standardized structure. The local RDKit "
+                "value is still reported separately."
+            ),
+        )
     except PubChemQuestionError:
         return PropertyEvidenceResolution(
             snapshot_id="pubchem-pug-unavailable",
@@ -122,7 +137,7 @@ def evidence_for(
         return PropertyObservation(
             value=None,
             unit=unit,
-            status=ResultStatus.NOT_AVAILABLE,
+            status=resolution.missing_status,
             reason_code=resolution.reason_code or "REFERENCE_RECORD_UNAVAILABLE",
             reason=resolution.reason or "No verified reference record is available.",
         )

@@ -1,7 +1,10 @@
 import type { ApiErrorResponse } from "../schemas/analysis";
-import type { BenzoChatResponse } from "../schemas/benzo";
+import type { BenzoEvidenceResponse } from "../schemas/benzo";
 
-const REQUEST_TIMEOUT_MS = 60_000;
+// Local Qwen inference on a 16 GB machine can legitimately take more than one
+// minute for evidence-heavy claims. Keep the UI request alive long enough for
+// the pinned model to finish instead of surfacing a false network failure.
+const REQUEST_TIMEOUT_MS = 120_000;
 
 async function benzoError(response: Response): Promise<string> {
   try {
@@ -17,7 +20,7 @@ export async function askBenzo(
   question: string,
   currentSmiles?: string | null,
   signal?: AbortSignal,
-): Promise<BenzoChatResponse> {
+): Promise<BenzoEvidenceResponse> {
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", forwardAbort, { once: true });
@@ -26,14 +29,17 @@ export async function askBenzo(
     REQUEST_TIMEOUT_MS,
   );
   try {
-    const response = await fetch("/api/benzo/chat", {
+    const contextualClaim = currentSmiles && /\b(?:this|current|shown|displayed)\b/i.test(question)
+      ? `${question}\nCurrent molecule SMILES: ${currentSmiles}`
+      : question;
+    const response = await fetch("/api/evidence/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, current_smiles: currentSmiles || null }),
+      body: JSON.stringify({ claim: contextualClaim, run_record_ids: [] }),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(await benzoError(response));
-    return (await response.json()) as BenzoChatResponse;
+    return (await response.json()) as BenzoEvidenceResponse;
   } finally {
     window.clearTimeout(timeout);
     signal?.removeEventListener("abort", forwardAbort);

@@ -7,10 +7,6 @@ from app.api.routes import router
 from app.services.conformers import ConformerGenerationError
 from app.services.document_extraction import DocumentExtractionError
 from app.services.image_recognition import ImageRecognitionError
-from app.services.openai_benzo import configure_fal_api_key
-
-FAL_API_KEY = '75e3c6f6-05d5-4695-859a-9a34ef5e8623:e916ba3225c20a6d51ee695a6735df53'
-configure_fal_api_key(FAL_API_KEY)
 
 app = FastAPI(
     title="ProvenanceLab API",

@@ -48,6 +48,10 @@ class PubChemQuestionError(RuntimeError):
     """Raised when a recognized molecule question cannot acquire a frozen record."""
 
 
+class PubChemCompoundNotFoundError(PubChemQuestionError):
+    """Raised when PubChem has no CID for the requested molecular identity."""
+
+
 @dataclass(frozen=True, slots=True)
 class ParsedMoleculeQuestion:
     kind: Literal[
@@ -63,6 +67,19 @@ class ParsedMoleculeQuestion:
         "rotatable_bonds",
     ]
     names: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedMoleculeAssertion:
+    kind: Literal[
+        "formula",
+        "same_formula",
+        "different_formula",
+        "same_inchikey",
+        "different_inchikey",
+    ]
+    names: tuple[str, ...]
+    asserted_value: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +218,48 @@ def parse_molecule_question(question: str) -> ParsedMoleculeQuestion | None:
     return None
 
 
+def parse_molecule_assertion(claim: str) -> ParsedMoleculeAssertion | None:
+    """Parse narrow structured-property assertions without guessing free-form chemistry."""
+
+    text = _trim_question(claim)
+    formula = re.fullmatch(
+        r"the\s+molecular\s+formula\s+of\s+(.+?)\s+is\s+([A-Z][A-Za-z0-9]*)",
+        text,
+        re.IGNORECASE,
+    )
+    if formula:
+        name = _trim_question(formula.group(1))
+        if 1 < len(name) <= 120:
+            return ParsedMoleculeAssertion(
+                kind="formula",
+                names=(name,),
+                asserted_value=formula.group(2),
+            )
+
+    comparison = re.fullmatch(
+        r"(.+?)\s+and\s+(.+?)\s+have\s+(?:the\s+)?"
+        r"(same|different)\s+(molecular\s+formulas?|inchikeys?)",
+        text,
+        re.IGNORECASE,
+    )
+    if comparison:
+        names = _normalize_comparison_names(comparison.group(1), comparison.group(2))
+        if not all(1 < len(name) <= 120 for name in names):
+            return None
+        relationship = comparison.group(3).casefold()
+        property_name = comparison.group(4).casefold()
+        property_key = "formula" if "formula" in property_name else "inchikey"
+        if property_key == "formula":
+            kind = "same_formula" if relationship == "same" else "different_formula"
+        else:
+            kind = "same_inchikey" if relationship == "same" else "different_inchikey"
+        return ParsedMoleculeAssertion(
+            kind=kind,
+            names=names,
+        )
+    return None
+
+
 class FrozenPubChemClient:
     """Fetch once from PUG REST, then reuse a hash-verified immutable local record."""
 
@@ -230,6 +289,12 @@ class FrozenPubChemClient:
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
                 return response.read()
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise PubChemCompoundNotFoundError(
+                    "PubChem has no CID for the requested molecular identity"
+                ) from error
+            raise PubChemQuestionError("PubChem compound acquisition failed") from error
         except (urllib.error.URLError, TimeoutError) as error:
             raise PubChemQuestionError("PubChem compound acquisition failed") from error
 
@@ -424,7 +489,8 @@ class PubChemQuestionAssistant:
     def try_check(self, request: ClaimCheckRequest) -> ClaimCheckResponse | None:
         parsed = parse_molecule_question(request.claim)
         if parsed is None:
-            return None
+            assertion = parse_molecule_assertion(request.claim)
+            return self._check_assertion(request, assertion) if assertion else None
         records = tuple(self._client.get(name) for name in parsed.names)
         evidence = [self._evidence(record) for record in records]
         statement = AtomicStatement(
@@ -474,17 +540,111 @@ class PubChemQuestionAssistant:
             ),
         )
 
+    def _check_assertion(
+        self,
+        request: ClaimCheckRequest,
+        parsed: ParsedMoleculeAssertion,
+    ) -> ClaimCheckResponse:
+        records = tuple(self._client.get(name) for name in parsed.names)
+        if parsed.kind == "formula":
+            property_name = "MolecularFormula"
+            observed = records[0].molecular_formula
+            agrees = observed == parsed.asserted_value
+            reason = (
+                f"The frozen PubChem record reports {records[0].title}'s molecular formula "
+                f"as {observed}, {'matching' if agrees else 'not matching'} "
+                f"the asserted {parsed.asserted_value}."
+            )
+            claim_type = ClaimType.COMPUTED_PROPERTY
+        else:
+            property_name = "MolecularFormula" if "formula" in parsed.kind else "InChIKey"
+            values = (
+                (records[0].molecular_formula, records[1].molecular_formula)
+                if property_name == "MolecularFormula"
+                else (records[0].inchikey, records[1].inchikey)
+            )
+            observed_same = values[0] == values[1]
+            asserts_same = parsed.kind.startswith("same_")
+            agrees = observed_same == asserts_same
+            relation = "the same" if observed_same else "different"
+            reason = (
+                f"The frozen PubChem records report {relation} {property_name} values for "
+                f"{records[0].title} and {records[1].title}."
+            )
+            claim_type = ClaimType.LITERATURE_FACT
+
+        stance = EvidenceStance.SUPPORTS if agrees else EvidenceStance.CONTRADICTS
+        evidence = [
+            self._evidence(record, property_name=property_name, stance=stance)
+            for record in records
+        ]
+        statement = AtomicStatement(
+            statement_id="S1",
+            text=request.claim.strip(),
+            claim_type=claim_type,
+            molecule_mentions=[record.title for record in records],
+        )
+        packet = EvidencePacket(
+            statement=statement,
+            resolution=ResolutionSummary(status=ResolutionStatus.NOT_REQUIRED),
+            evidence_items=evidence,
+        )
+        proposal = VerdictProposal(
+            statement_id="S1",
+            verdict=Verdict.SUPPORTED if agrees else Verdict.CONTRADICTED,
+            citation_ids=[item.evidence_id for item in evidence],
+            reason=reason,
+            limitations=[
+                "The verdict is limited to checksum-verified PubChem compound records."
+            ],
+        )
+        verdict = materialize_statement_verdict(packet, proposal)
+        input_hash = _sha256(request.model_dump(mode="json"))
+        configuration_hash = _sha256(
+            {
+                "pipeline_version": PUBCHEM_QUESTION_PIPELINE_VERSION,
+                "source_records": [record.raw_sha256 for record in records],
+                "property": property_name,
+            }
+        )
+        output_payload = {
+            "verdicts": [verdict.model_dump(mode="json")],
+            "research_aid_notice": RESEARCH_AID_NOTICE,
+        }
+        output_hash = _sha256(output_payload)
+        pipeline_digest = _sha256(PUBCHEM_QUESTION_PIPELINE_VERSION.encode("utf-8"))
+        return ClaimCheckResponse(
+            assistant_run_id=f"EA-{input_hash[:12]}-{output_hash[:12]}",
+            verdicts=[verdict],
+            manifest=EvidenceAssistantManifest(
+                model_name="deterministic-pubchem-structure-v1",
+                model_digest=pipeline_digest,
+                evidence_snapshot_id="+".join(record.snapshot_id for record in records),
+                input_sha256=input_hash,
+                configuration_sha256=configuration_hash,
+                output_sha256=output_hash,
+            ),
+        )
+
     @staticmethod
-    def _evidence(record: FrozenPubChemCompound) -> EvidenceItem:
+    def _evidence(
+        record: FrozenPubChemCompound,
+        *,
+        property_name: str | None = None,
+        stance: EvidenceStance = EvidenceStance.SUPPORTS,
+    ) -> EvidenceItem:
+        evidence_suffix = (
+            f"PROPERTY:{property_name}" if property_name else f"RUN:PUBCHEM:CID:{record.cid}"
+        )
         return EvidenceItem(
-            evidence_id=f"{record.snapshot_id}:RUN:PUBCHEM:CID:{record.cid}",
+            evidence_id=f"{record.snapshot_id}:{evidence_suffix}",
             source_type=EvidenceSourceType.RUN_RECORD,
             source_record_id=f"PUBCHEM:CID:{record.cid}",
             basis=EvidenceBasis.COMPUTED,
-            stance=EvidenceStance.SUPPORTS,
+            stance=stance,
             directness=EvidenceDirectness.DIRECT,
             molecule_inchikey=record.inchikey,
-            endpoint="compound_identity",
+            endpoint=property_name or "compound_identity",
             assay_conditions={
                 "record_kind": "PUBCHEM_COMPOUND",
                 "cid": record.cid,

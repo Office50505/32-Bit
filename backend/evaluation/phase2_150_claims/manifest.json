@@ -1,0 +1,102 @@
+{
+  "claim_count": 150,
+  "compound_claim_count": 15,
+  "created_at": "2026-10-25T00:00:00+05:30",
+  "dataset_id": "provenancelab-phase2-150-gold-v1",
+  "dataset_sha256": "b87d92f4814cdc51f91e6c6f3cafbb8238a700fbe0abb8bc5df4fead158d5356",
+  "label_policy": "docs/phase-2-evidence-contract.md#2-verdict-contract",
+  "pubchem_bundle": {
+    "bundle_sha256": "9f0fd8a02ecab6ce5fc994053abb767022a04fef53976da9363775c82491c7f4",
+    "record_count": 18,
+    "record_sha256s": {
+      "1118": "ddf1746cab61a7d8abce9aca20d69f420213dd64539f97e30bb787ccdbc9c590",
+      "176": "fd29d78d6ae67c4fba74aa20084c050b239aa9fa0827a725cb224dd2d9b6de26",
+      "222": "02793a7ffd5847a176433f2841af6f66619547041103b8ca28d1ea0c33b7771e",
+      "2244": "29725c0dbb43c108c2ee8982a87b82bab099948dd16dd2bf54734f986c419f0c",
+      "241": "5c2472e4fbc16a9d613ab8f828b29dcc8f1305188c33528de0c2a2115525f4b6",
+      "2519": "f37a73a2b5babeb53a765d5207cf5e46b3688be9778db0704e2b75f21830432a",
+      "280": "a12e5320a09d08826023c5f4dafe0426394001ea1004bad7124194edeb1c8abc",
+      "284": "3a36ae185d243715fbebf8d55e14b480f8ffeda92fb7ed993e0c32896c870f7d",
+      "297": "57dcb3776c17ad6867b3deaa8f4b49752ab2a30a0d6fe6da065927df838a453d",
+      "5234": "ef6a7c03639c49f223f66778169ff6b121ef7654f31d1dd33fbc2efe691fdf06",
+      "5291": "79d4593d8c547cfc1d26a9ba261141ddcbb56c9c1a81182dd2b1b43b35c642d0",
+      "5793": "7da20fbb73cae510341dc9567a0597e9f5f7adbc91d4c50b2217b69abaf6e387",
+      "5950": "d9f758de8983bc0138cf91858293eaeaeff779eec9eaffc3e354508f8b23f000",
+      "702": "976af71aab39910b728a90ad90578e271a75ace4f1596d9af76ca712b002f9e6",
+      "71080": "1c48f000f0347700f7177b69c938b82da6337acf4e11dedf97255e3da2b436c8",
+      "784": "860d9cfbab708e8e779726a7db4d14eec44c05b68fe4332045cae29b90e21af9",
+      "962": "a89b5fcdac10a29679b7bfb537d5bbd1dfeda38d7890066fddc583876d787ffb",
+      "977": "3b3f01265937347129c5db150e77e974e58cb845951354d74b614b67c2dee110"
+    }
+  },
+  "research_aid_notice": "Research aid only. This report summarizes available evidence and is not a prediction of clinical efficacy or safety.",
+  "schema_version": 1,
+  "scientific_review": {
+    "approved_dataset_sha256": "b87d92f4814cdc51f91e6c6f3cafbb8238a700fbe0abb8bc5df4fead158d5356",
+    "decision": "APPROVED_AS_GOLD",
+    "review_date": "2026-10-25",
+    "reviewer_role": "project owner"
+  },
+  "source_snapshots": [
+    {
+      "content_sha256": "ae3e653ace3f3d960386419bcf5e41752b123703990f3aac22d3b04e9817ae60",
+      "scope": {
+        "chembl_api_source_sha256": "5778c55b33fd3ce2e246dc26a0a458277f5c195d6d9bf6676e47ccf4c2d1e5b9",
+        "endpoints": [
+          "IC50",
+          "EC50",
+          "Ki",
+          "Kd"
+        ],
+        "expected_release": "ChEMBL_37",
+        "molecule_chembl_ids": [
+          "CHEMBL25"
+        ],
+        "retraction_source_sha256": "2f116e9ffed718e6b2e37cd6ff652c091fd1971e1ad9c0639f0de16e7f50a655",
+        "retrieved_at": "2026-10-24T18:46:28+00:00",
+        "target_chembl_ids": [
+          "CHEMBL221"
+        ]
+      },
+      "snapshot_id": "chembl-api-37-chembl25-chembl221-0e2fa90fdf68",
+      "source_name": "ChEMBL Data Web Services + frozen retraction screen",
+      "source_sha256": "c2e424894578af69e16a733ea36325e589c0adff1272eedfc383ecd5c0d19f6f",
+      "source_version": "ChEMBL_37"
+    },
+    {
+      "content_sha256": "c375127cc75c09d0ca967872373c73316dda0de4c26c60153607e48128e0878a",
+      "scope": {
+        "chembl_api_source_sha256": "1738870ad98f41abb69fe1b6687a49d81b0c7304199d8f4315d2e10ebdf1e43c",
+        "endpoints": [
+          "IC50",
+          "EC50",
+          "Ki",
+          "Kd"
+        ],
+        "expected_release": "ChEMBL_37",
+        "molecule_chembl_ids": [
+          "CHEMBL941"
+        ],
+        "retraction_source_sha256": "2f116e9ffed718e6b2e37cd6ff652c091fd1971e1ad9c0639f0de16e7f50a655",
+        "retrieved_at": "2026-10-24T00:00:00Z",
+        "target_chembl_ids": [
+          "CHEMBL1862"
+        ]
+      },
+      "snapshot_id": "chembl-api-37-imatinib-abl1-smoke",
+      "source_name": "ChEMBL Data Web Services + frozen retraction screen",
+      "source_sha256": "ffeefb871b754eb4f8fccc3789a905d83ad89226dcb950fe818b477c75f3e6a1",
+      "source_version": "ChEMBL_37"
+    }
+  ],
+  "split": "LOCKED_EVALUATION",
+  "statement_count": 165,
+  "status": "GOLD",
+  "training_use": "PROHIBITED",
+  "verdict_distribution": {
+    "CONTRADICTED": 40,
+    "INSUFFICIENT_EVIDENCE": 50,
+    "OUT_OF_SCOPE": 30,
+    "SUPPORTED": 45
+  }
+}

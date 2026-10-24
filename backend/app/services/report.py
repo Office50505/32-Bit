@@ -56,7 +56,9 @@ def _depiction_png(result: AnalyzeResponse) -> bytes | None:
                 return None
             rdDepictor.Compute2DCoords(molecule)
             drawer = rdMolDraw2D.MolDraw2DCairo(720, 300)
-            drawer.drawOptions().clearBackground = False
+            options = drawer.drawOptions()
+            options.clearBackground = False
+            options.useBWAtomPalette()
             atoms = sorted(
                 {index for issue in result.issues for index in issue.location.atom_indices}
             )
@@ -171,6 +173,71 @@ def build_run_pdf(run: RunResponse) -> bytes:
             ),
         ),
     ]
+
+    if run.environment is not None:
+        story.extend(
+            [
+                Paragraph("Replay environment", heading),
+                Table(
+                    [
+                        ["Python", run.environment.python],
+                        ["RDKit", run.environment.rdkit],
+                        ["Platform", f"{run.environment.platform}/{run.environment.machine}"],
+                        ["Dependency lock SHA-256", run.environment.dependency_lock_sha256],
+                        ["Environment SHA-256", run.environment.environment_sha256],
+                    ],
+                    colWidths=[42 * mm, 132 * mm],
+                    style=TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (0, -1), PALE),
+                            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+                            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                            ("FONTNAME", (1, 0), (1, -1), "Courier"),
+                            ("FONTSIZE", (0, 0), (-1, -1), 7),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("PADDING", (0, 0), (-1, -1), 5),
+                        ]
+                    ),
+                ),
+            ]
+        )
+
+    if run.identity_comparisons:
+        identity_rows: list[list[object]] = [["Inputs", "Verdict", "Reason"]]
+        for comparison in run.identity_comparisons:
+            left = run.results[comparison.left_index].label
+            right = run.results[comparison.right_index].label
+            identity_rows.append(
+                [
+                    Paragraph(f"{_text(left)} vs {_text(right)}", small),
+                    Paragraph(_text(comparison.relationship.value), code),
+                    Paragraph(_text(comparison.reason), small),
+                ]
+            )
+        story.extend(
+            [
+                Paragraph("Molecule identity verdicts", heading),
+                Paragraph(
+                    "Explicit pairwise decisions from canonical and standardized structures.",
+                    small,
+                ),
+                Table(
+                    identity_rows,
+                    colWidths=[42 * mm, 48 * mm, 84 * mm],
+                    repeatRows=1,
+                    style=TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), PALE),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), NAVY),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("PADDING", (0, 0), (-1, -1), 5),
+                        ]
+                    ),
+                ),
+            ]
+        )
 
     for index, result in enumerate(run.results, start=1):
         story.extend(
@@ -376,9 +443,48 @@ def build_run_pdf(run: RunResponse) -> bytes:
                 ]
             )
         )
+        bioactivity = result.bioactivity_evidence
+        activity_count = (
+            str(bioactivity.activity_count)
+            if bioactivity.activity_count is not None
+            else "Not available"
+        )
+        source_value = bioactivity.source_url or "Not available"
+        bioactivity_table = Table(
+            [
+                ["Source", bioactivity.source],
+                ["Status", bioactivity.status.value],
+                ["ChEMBL molecule", bioactivity.molecule_chembl_id or "No exact match"],
+                ["Preferred name", bioactivity.preferred_name or "Not available"],
+                ["Release", bioactivity.release or "Not available"],
+                ["Linked activity records", activity_count],
+                ["Frozen snapshot", bioactivity.snapshot_id],
+                ["Source response", Paragraph(escape(source_value), code)],
+                ["Reason", Paragraph(escape(bioactivity.reason or "Available"), small)],
+            ],
+            colWidths=[42 * mm, 132 * mm],
+            style=TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, -1), PALE),
+                    ("GRID", (0, 0), (-1, -1), 0.4, LINE),
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 6.8),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("PADDING", (0, 0), (-1, -1), 4),
+                ]
+            ),
+        )
         story.extend(
             [
                 property_table,
+                Paragraph("ChEMBL bioactivity evidence", heading),
+                Paragraph(
+                    "This exact-structure activity-record count describes database coverage. "
+                    "It is not evidence of efficacy or safety.",
+                    small,
+                ),
+                Spacer(1, 4),
+                bioactivity_table,
                 Paragraph("Provenance", heading),
                 Table(
                     [

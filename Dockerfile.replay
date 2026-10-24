@@ -1,0 +1,15 @@
+FROM python:3.11.17-slim
+
+ENV PYTHONHASHSEED=0 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PROVENANCELAB_DB_PATH=/data/provenancelab.sqlite3
+
+WORKDIR /app
+COPY backend/requirements.lock.txt /app/backend/requirements.lock.txt
+RUN python -m pip install --no-cache-dir --no-deps -r /app/backend/requirements.lock.txt
+COPY backend /app/backend
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e /app/backend
+
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "app.main:app", "--app-dir", "/app/backend", "--host", "0.0.0.0", "--port", "8000"]

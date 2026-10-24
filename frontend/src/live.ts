@@ -22,6 +22,21 @@ function mapProperty(property: PropertyComparison): DescriptorRecord {
   };
 }
 
+function mapEvidenceStatus(status: AnalyzeResponse["bioactivity_evidence"]["status"]): EvidenceStatus {
+  switch (status) {
+    case "AVAILABLE": return "MATCH";
+    case "CONFLICTING_EVIDENCE": return "DIFFERENCE";
+    case "INVALID_INPUT":
+    case "NOT_COMPUTABLE":
+    case "COMPUTATION_ERROR": return "NOT_COMPUTED";
+    case "AMBIGUOUS_INPUT": return "AMBIGUOUS_INPUT";
+    case "NOT_AVAILABLE": return "NOT_AVAILABLE";
+    case "NOT_APPLICABLE": return "NOT_APPLICABLE";
+    case "NO_REFERENCE_MATCH": return "NO_REFERENCE_MATCH";
+    case "OUTSIDE_SNAPSHOT_COVERAGE": return "OUTSIDE_SNAPSHOT_COVERAGE";
+  }
+}
+
 export function fromApi(result: AnalyzeResponse, inputIndex = 0): MoleculeCandidate {
   const formula = result.properties.find((item) => item.key === "molecular_formula")?.computed.value;
   const weight = result.properties.find((item) => item.key === "molecular_weight")?.computed.value;
@@ -40,6 +55,18 @@ export function fromApi(result: AnalyzeResponse, inputIndex = 0): MoleculeCandid
     steps: result.standardization_steps.map((step) => ({ code: step.code, label: step.label,
       before: step.before_smiles, after: step.after_smiles, changed: step.changed })),
     descriptors: result.properties.map(mapProperty), confirmed: true, depictionSvg: result.depiction_svg,
+    bioactivity: {
+      status: mapEvidenceStatus(result.bioactivity_evidence.status),
+      moleculeChemblId: result.bioactivity_evidence.molecule_chembl_id ?? null,
+      preferredName: result.bioactivity_evidence.preferred_name ?? null,
+      release: result.bioactivity_evidence.release ?? null,
+      activityCount: result.bioactivity_evidence.activity_count ?? null,
+      snapshotId: result.bioactivity_evidence.snapshot_id,
+      snapshotScope: result.bioactivity_evidence.snapshot_scope,
+      sourceUrl: result.bioactivity_evidence.source_url ?? null,
+      responseSha256: result.bioactivity_evidence.response_sha256 ?? null,
+      reason: result.bioactivity_evidence.reason,
+    },
     sourceFileSha256: result.source?.file_sha256, inputIndex,
     sourcePage: result.source?.page, sourceRow: result.source?.row,
     sourceExcerpt: result.source?.source_excerpt,

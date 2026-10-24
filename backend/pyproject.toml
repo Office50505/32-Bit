@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75", "wheel"]
+requires = ["setuptools==84.0.0", "wheel==0.48.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,23 +8,22 @@ version = "0.1.0"
 description = "Deterministic molecular validation API for ProvenanceLab"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-  "fastapi>=0.118,<1",
-  "openai>=2.8,<3",
-  "pillow>=11,<13",
-  "pypdf>=6,<7",
-  "pydantic>=2.11,<3",
-  "python-dotenv>=1.0,<2",
-  "python-multipart>=0.0.20,<1",
-  "rdkit>=2025.3.1",
-  "reportlab>=4.4,<5",
-  "uvicorn[standard]>=0.37,<1",
+  "fastapi==0.162.0",
+  "pillow==12.3.0",
+  "pypdf==6.21.2",
+  "pydantic==2.14.1",
+  "python-dotenv==1.2.4",
+  "python-multipart==0.0.32",
+  "rdkit==2026.9.1",
+  "reportlab==4.5.1",
+  "uvicorn[standard]==0.54.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28,<1",
-  "pytest>=8.4,<9",
-  "ruff>=0.13,<1",
+  "httpx==0.28.1",
+  "pytest==8.4.2",
+  "ruff==0.17.2",
 ]
 
 [tool.setuptools.packages.find]

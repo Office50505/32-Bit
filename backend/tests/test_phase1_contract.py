@@ -18,7 +18,13 @@ from app.core.provenance import (
     configuration_sha256,
 )
 from app.main import app
-from app.models.analysis import AnalyzeRequest, PropertyObservation, ResultStatus
+from app.models.analysis import (
+    AnalyzeRequest,
+    MoleculeStatus,
+    PropertyObservation,
+    ResultStatus,
+    Severity,
+)
 from app.services import chemistry
 
 CORPUS_PATH = Path(__file__).parent / "fixtures" / "phase1_chemistry_corpus.json"
@@ -63,11 +69,13 @@ def assert_missing_observation_has_reason(observation: dict[str, Any]) -> None:
 
 def test_corpus_shape_and_allocation() -> None:
     assert CORPUS["schema_version"] == "phase1-corpus-v1"
-    assert CORPUS["approval_state"] == "proposed"
+    assert CORPUS["approval_state"] == "approved"
     assert len(CASES) == 31
     assert len({case["case_id"] for case in CASES}) == 31
     assert Counter(case["category"] for case in CASES) == EXPECTED_CATEGORY_COUNTS
     assert {case["input"]["format"] for case in CASES} == {"smiles"}
+    # Per-case values preserve their authored-candidate provenance; corpus-level approval
+    # signs the exact set as a whole.
     assert {case["expectation_status"] for case in CASES} == {"proposed"}
     assert all(case["reason"] for case in CASES)
 
@@ -284,6 +292,8 @@ def test_configuration_hash_covers_chemistry_configuration() -> None:
         "chemistry_policy",
         "validation_policy",
         "validation",
+        "input_normalization",
+        "depiction",
         "standardization",
         "descriptors",
         "rdkit",
@@ -304,6 +314,67 @@ def test_configuration_hash_covers_chemistry_configuration() -> None:
     changed_validation["validation"]["unspecified_stereo_is_ambiguous"] = False
     assert configuration_sha256(changed_validation) != original_hash
 
+    changed_normalization = deepcopy(configuration)
+    changed_normalization["input_normalization"]["non_ring_aromatic_atom_case"][
+        "enabled"
+    ] = False
+    assert configuration_sha256(changed_normalization) != original_hash
+
+    changed_depiction = deepcopy(configuration)
+    changed_depiction["depiction"]["atom_palette"] = "default"
+    assert configuration_sha256(changed_depiction) != original_hash
+
     changed_schema = deepcopy(configuration)
     changed_schema["output_schema"] = "analysis-response-v2"
     assert configuration_sha256(changed_schema) != original_hash
+
+
+def test_lowercase_non_ring_atoms_are_normalized_and_audited() -> None:
+    result = chemistry.analyze_structure(AnalyzeRequest(structure="cco"))
+
+    assert result.raw_input == "cco"
+    assert result.status == MoleculeStatus.VALID
+    assert result.canonical_smiles == "CCO"
+    assert result.standardized_smiles == "CCO"
+    assert [issue.code for issue in result.issues] == ["ATOM_CASE_NORMALIZED"]
+    assert result.issues[0].severity == Severity.INFO
+    assert result.issues[0].location.atom_indices == [0, 1, 2]
+    assert result.standardization_steps[0].code == "NORMALIZE_NON_RING_ATOM_CASE"
+    assert result.standardization_steps[0].before_smiles == "cco"
+    assert result.standardization_steps[0].after_smiles == "CCO"
+
+
+def test_aromatic_ring_case_is_never_uppercased() -> None:
+    result = chemistry.analyze_structure(AnalyzeRequest(structure="c1ccccc1"))
+
+    assert result.status == MoleculeStatus.VALID
+    assert result.canonical_smiles == "c1ccccc1"
+    assert all(issue.code != "ATOM_CASE_NORMALIZED" for issue in result.issues)
+    assert all(
+        step.code != "NORMALIZE_NON_RING_ATOM_CASE"
+        for step in result.standardization_steps
+    )
+
+
+def test_only_non_ring_suffix_is_case_normalized() -> None:
+    result = chemistry.analyze_structure(AnalyzeRequest(structure="c1ccccc1o"))
+
+    assert result.status == MoleculeStatus.VALID
+    assert result.canonical_smiles == "Oc1ccccc1"
+    assert result.issues[0].location.atom_indices == [6]
+    assert result.standardization_steps[0].after_smiles == "c1ccccc1O"
+
+
+def test_case_normalization_does_not_hide_a_separate_valence_error() -> None:
+    result = chemistry.analyze_structure(AnalyzeRequest(structure="o=c=n=c"))
+
+    assert result.status == MoleculeStatus.INVALID
+    assert result.canonical_smiles is None
+    assert [issue.code for issue in result.issues] == [
+        "IMPOSSIBLE_VALENCE",
+        "ATOM_CASE_NORMALIZED",
+    ]
+    assert result.issues[0].location.atom_indices == [2]
+    assert [step.code for step in result.standardization_steps] == [
+        "NORMALIZE_NON_RING_ATOM_CASE"
+    ]

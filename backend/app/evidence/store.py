@@ -634,6 +634,7 @@ class EvidenceStore:
         target_id: str,
         endpoint: str | None = None,
         organism: str | None = None,
+        activity_id: str | None = None,
         limit: int = 100,
     ) -> list[sqlite3.Row]:
         if not 1 <= limit <= 1_000:
@@ -650,6 +651,9 @@ class EvidenceStore:
         if organism is not None:
             clauses.append("assays.organism = ?")
             parameters.append(organism)
+        if activity_id is not None:
+            clauses.append("activities.activity_id = ?")
+            parameters.append(activity_id)
         parameters.append(limit)
         return self._connection.execute(
             f"""

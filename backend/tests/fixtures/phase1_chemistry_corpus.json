@@ -1,7 +1,7 @@
 {
   "schema_version": "phase1-corpus-v1",
-  "chemistry_policy": "phase1-proposed.1",
-  "approval_state": "proposed",
+  "chemistry_policy": "phase1-approved.1",
+  "approval_state": "approved",
   "cases": [
     {
       "case_id": "SYNTAX-001",

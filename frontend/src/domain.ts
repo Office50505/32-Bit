@@ -48,6 +48,19 @@ export interface DescriptorRecord {
   reason: string;
 }
 
+export interface BioactivityCoverage {
+  status: EvidenceStatus;
+  moleculeChemblId: string | null;
+  preferredName: string | null;
+  release: string | null;
+  activityCount: number | null;
+  snapshotId: string;
+  snapshotScope: string;
+  sourceUrl: string | null;
+  responseSha256: string | null;
+  reason: string;
+}
+
 export interface ProvenanceManifest {
   analysisId: string;
   inputSha256: string;
@@ -71,6 +84,7 @@ export interface MoleculeCandidate {
   issues: ValidationIssue[];
   steps: StandardizationStep[];
   descriptors: DescriptorRecord[];
+  bioactivity: BioactivityCoverage;
   manifest: ProvenanceManifest;
   confirmed: boolean;
   depictionSvg?: string | null;
@@ -87,4 +101,13 @@ export interface MoleculeCandidate {
   }>;
   mentionCount: number;
   inputIndex: number;
+}
+
+export function moleculeDisplayLabel(
+  molecule: Pick<MoleculeCandidate, "label" | "inputIndex">,
+): string {
+  const label = molecule.label.trim();
+  return label && label !== "Untitled molecule"
+    ? label
+    : `Structure ${molecule.inputIndex + 1}`;
 }

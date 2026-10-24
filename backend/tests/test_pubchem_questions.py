@@ -7,6 +7,7 @@ from app.models.evidence_assistant import ClaimCheckRequest, Verdict
 from app.services.pubchem_questions import (
     FrozenPubChemClient,
     PubChemQuestionAssistant,
+    parse_molecule_assertion,
     parse_molecule_question,
 )
 
@@ -122,3 +123,38 @@ def test_parser_routes_additional_pubchem_property_questions() -> None:
     assert described is not None
     assert described.kind == "describe"
     assert described.names == ("caffeine",)
+
+
+def test_structured_property_assertions_are_checked_against_frozen_records(
+    tmp_path: Path,
+) -> None:
+    def transport(url: str, _timeout: float) -> bytes:
+        name = "L-Alanine" if "l-alanine" in url.casefold() else "D-Alanine"
+        return pubchem_payload(name)
+
+    assistant = PubChemQuestionAssistant(
+        FrozenPubChemClient(tmp_path, transport=transport)
+    )
+    correct = assistant.try_check(
+        ClaimCheckRequest(claim="The molecular formula of L-Alanine is C3H7NO2.")
+    )
+    incorrect = assistant.try_check(
+        ClaimCheckRequest(claim="The molecular formula of L-Alanine is CH4.")
+    )
+    stereo = assistant.try_check(
+        ClaimCheckRequest(claim="L-alanine and D-alanine have different InChIKeys.")
+    )
+
+    assert correct is not None and correct.verdicts[0].verdict == Verdict.SUPPORTED
+    assert incorrect is not None and incorrect.verdicts[0].verdict == Verdict.CONTRADICTED
+    assert stereo is not None and stereo.verdicts[0].verdict == Verdict.SUPPORTED
+    assert correct.verdicts[0].citations[0].evidence_id.endswith(
+        ":PROPERTY:MolecularFormula"
+    )
+    assert stereo.verdicts[0].citations[0].evidence_id.endswith(":PROPERTY:InChIKey")
+
+
+def test_structured_assertion_parser_rejects_compound_claims() -> None:
+    assert parse_molecule_assertion(
+        "The molecular formula of Water is H2O. Also, aspirin is safe for everyone."
+    ) is None

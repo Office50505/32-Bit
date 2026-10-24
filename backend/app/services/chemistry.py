@@ -15,6 +15,7 @@ from app.core.provenance import configuration_payload, create_manifest
 from app.models.analysis import (
     AnalyzeRequest,
     AnalyzeResponse,
+    BioactivityEvidence,
     IssueLocation,
     MoleculeStatus,
     PropertyComparison,
@@ -24,6 +25,7 @@ from app.models.analysis import (
     StandardizationStep,
     ValidationIssue,
 )
+from app.services.chembl_comparison import resolve_bioactivity_evidence
 from app.services.evidence import (
     PropertyEvidenceResolution,
     evidence_for,
@@ -199,16 +201,22 @@ def _invalid_issue(
     code: str,
     detail: str,
     atom_indices: list[int] | None = None,
+    *,
+    subcode: str | None = None,
+    title: str | None = None,
+    explanation: str | None = None,
+    next_step: str | None = None,
 ) -> ValidationIssue:
     content = ISSUE_CONTENT[code]
     return ValidationIssue(
         code=code,
-        title=content["title"],
+        subcode=subcode,
+        title=title or content["title"],
         severity=Severity.ERROR,
         summary=content["summary"],
-        explanation=content["explanation"],
+        explanation=explanation or content["explanation"],
         why_it_matters=content["why_it_matters"],
-        next_step=content["next_step"],
+        next_step=next_step or content["next_step"],
         location=IssueLocation(atom_indices=atom_indices or []),
         technical_detail=detail,
     )
@@ -248,6 +256,24 @@ def _sanitization_issue(
         if problem is not None
         else f"RDKit sanitization flag: {int(failure)}"
     )
+    non_ring_aromatic = re.search(r"non-ring atom (\d+) marked aromatic", detail)
+    if code == "AROMATICITY_ERROR" and non_ring_aromatic is not None:
+        atom_index = int(non_ring_aromatic.group(1))
+        return _invalid_issue(
+            code,
+            detail,
+            [atom_index],
+            subcode="AROMATIC_ATOM_OUTSIDE_RING",
+            title="Aromatic atom used outside a ring",
+            explanation=(
+                f"Atom {atom_index + 1} is written with lowercase aromatic notation, "
+                "but it is not part of a ring."
+            ),
+            next_step=(
+                "Use an uppercase atom symbol for a non-aromatic atom, or correct the ring "
+                "closure and aromatic bond pattern."
+            ),
+        )
     return _invalid_issue(
         code,
         detail,
@@ -255,16 +281,89 @@ def _sanitization_issue(
     )
 
 
+def _normalize_non_ring_aromatic_case(
+    raw_mol: Chem.Mol,
+    raw_smiles: str,
+) -> tuple[Chem.Mol, ValidationIssue | None, StandardizationStep | None]:
+    """Repair the common mistake of using lowercase atoms outside aromatic rings."""
+    candidate = Chem.Mol(raw_mol)
+    try:
+        Chem.GetSymmSSSR(candidate)
+    except Exception:
+        return raw_mol, None, None
+
+    atom_indices = [
+        atom.GetIdx()
+        for atom in candidate.GetAtoms()
+        if atom.GetIsAromatic() and not atom.IsInRing()
+    ]
+    if not atom_indices:
+        return raw_mol, None, None
+
+    for atom_index in atom_indices:
+        candidate.GetAtomWithIdx(atom_index).SetIsAromatic(False)
+    for bond in candidate.GetBonds():
+        if bond.GetIsAromatic() and not bond.IsInRing():
+            bond.SetIsAromatic(False)
+            bond.SetBondType(Chem.BondType.SINGLE)
+
+    try:
+        normalized_smiles = Chem.MolToSmiles(
+            candidate,
+            canonical=False,
+            isomericSmiles=True,
+        )
+    except Exception:
+        return raw_mol, None, None
+
+    human_atoms = ", ".join(str(index + 1) for index in atom_indices)
+    issue = ValidationIssue(
+        code="ATOM_CASE_NORMALIZED",
+        subcode="LOWERCASE_NON_RING_ATOM",
+        title="Lowercase atom notation normalized",
+        severity=Severity.INFO,
+        summary="Lowercase non-ring atom symbols were interpreted as ordinary atoms.",
+        explanation=(
+            f"Atom(s) {human_atoms} used lowercase aromatic notation but are not part of an "
+            "aromatic ring. ProvenanceLab converted only those atoms to their uppercase, "
+            "non-aromatic form before validation."
+        ),
+        why_it_matters=(
+            "SMILES is case-sensitive: lowercase atoms mean aromatic atoms, while uppercase "
+            "atoms mean ordinary non-aromatic atoms."
+        ),
+        next_step="Confirm the normalized structure shown in the audit record.",
+        location=IssueLocation(atom_indices=atom_indices),
+        technical_detail=(
+            f"Normalized non-ring aromatic atom indices {atom_indices}; retained raw input "
+            "unchanged in the analysis record."
+        ),
+    )
+    step = StandardizationStep(
+        code="NORMALIZE_NON_RING_ATOM_CASE",
+        label="Normalize lowercase non-ring atom symbols",
+        before_smiles=raw_smiles,
+        after_smiles=normalized_smiles,
+        changed=True,
+    )
+    return candidate, issue, step
+
+
 def _parse_and_validate(
     smiles: str,
-) -> tuple[Chem.Mol | None, list[ValidationIssue], Chem.Mol | None]:
+) -> tuple[
+    Chem.Mol | None,
+    list[ValidationIssue],
+    Chem.Mol | None,
+    StandardizationStep | None,
+]:
     with rdBase.BlockLogs():
         try:
             raw_mol = Chem.MolFromSmiles(smiles, sanitize=False)
         except Exception:
             raw_mol = None
     if raw_mol is None:
-        return None, [_syntax_issue(smiles)], None
+        return None, [_syntax_issue(smiles)], None, None
 
     atom_count = raw_mol.GetNumAtoms()
     fragment_count = len(Chem.GetMolFrags(raw_mol, sanitizeFrags=False))
@@ -277,6 +376,7 @@ def _parse_and_validate(
             None,
             [_invalid_issue("RESOURCE_LIMIT_EXCEEDED", detail)],
             raw_mol,
+            None,
         )
 
     unspecified_atoms = [atom.GetIdx() for atom in raw_mol.GetAtoms() if atom.GetAtomicNum() == 0]
@@ -306,7 +406,13 @@ def _parse_and_validate(
                 )
             ],
             raw_mol,
+            None,
         )
+
+    raw_mol, normalization_issue, normalization_step = _normalize_non_ring_aromatic_case(
+        raw_mol,
+        smiles,
+    )
 
     with rdBase.BlockLogs():
         try:
@@ -317,11 +423,19 @@ def _parse_and_validate(
                 "SANITIZATION_ERROR",
                 f"RDKit sanitization raised {type(exc).__name__}.",
             )
-            return None, [issue], raw_mol
+            issues = [issue]
+            if normalization_issue is not None:
+                issues.append(normalization_issue)
+            return None, issues, raw_mol, normalization_step
     if sanitization_failure != Chem.SanitizeFlags.SANITIZE_NONE:
-        return None, [_sanitization_issue(problems, sanitization_failure)], raw_mol
+        issues = [_sanitization_issue(problems, sanitization_failure)]
+        if normalization_issue is not None:
+            issues.append(normalization_issue)
+        return None, issues, raw_mol, normalization_step
 
     issues: list[ValidationIssue] = []
+    if normalization_issue is not None:
+        issues.append(normalization_issue)
     Chem.AssignStereochemistry(raw_mol, force=True, cleanIt=True)
     unassigned_atoms: list[int] = []
     unassigned_bonds: list[int] = []
@@ -380,7 +494,7 @@ def _parse_and_validate(
             )
         )
 
-    return raw_mol, issues, raw_mol
+    return raw_mol, issues, raw_mol, normalization_step
 
 
 def _standardization_functions() -> dict[str, Callable[[Chem.Mol], Chem.Mol]]:
@@ -449,6 +563,7 @@ def _depict(
         options.clearBackground = False
         options.addAtomIndices = bool(highlight_atoms)
         options.bondLineWidth = 2
+        options.useBWAtomPalette()
         color = (0.82, 0.08, 0.16, 1.0)
         drawer.DrawMolecule(
             depiction,
@@ -578,19 +693,40 @@ def _standardization_failure_properties() -> list[PropertyComparison]:
 
 
 def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
-    molecule, issues, depiction_mol = _parse_and_validate(request.structure)
-    highlight_atoms = [index for issue in issues for index in issue.location.atom_indices]
-    highlight_bonds = [index for issue in issues for index in issue.location.bond_indices]
+    molecule, issues, depiction_mol, normalization_step = _parse_and_validate(
+        request.structure
+    )
+    highlight_atoms = [
+        index
+        for issue in issues
+        if issue.severity != Severity.INFO
+        for index in issue.location.atom_indices
+    ]
+    highlight_bonds = [
+        index
+        for issue in issues
+        if issue.severity != Severity.INFO
+        for index in issue.location.bond_indices
+    ]
 
     if molecule is None:
         status = MoleculeStatus.INVALID
         canonical_smiles = None
         standardized_smiles = None
-        steps: list[StandardizationStep] = []
+        steps: list[StandardizationStep] = (
+            [normalization_step] if normalization_step is not None else []
+        )
         properties = _invalid_properties()
         evidence_resolution = PropertyEvidenceResolution(
             snapshot_id="not-applicable-invalid-structure",
             snapshot_scope="No evidence lookup was attempted because the structure is invalid.",
+        )
+        bioactivity_evidence = BioactivityEvidence(
+            status=ResultStatus.NOT_APPLICABLE,
+            snapshot_id="not-applicable-invalid-structure",
+            snapshot_scope="No ChEMBL lookup was attempted because the structure is invalid.",
+            reason_code="NO_STANDARDIZED_STRUCTURE_FOR_CHEMBL",
+            reason="ChEMBL comparison requires a valid standardized molecular identity.",
         )
     else:
         canonical_smiles = Chem.MolToSmiles(molecule, isomericSmiles=True)
@@ -599,7 +735,12 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
             if any(issue.severity == Severity.WARNING for issue in issues)
             else MoleculeStatus.VALID
         )
-        standardized_mol, steps = _standardize(molecule)
+        standardized_mol, standardization_steps = _standardize(molecule)
+        steps = (
+            [normalization_step, *standardization_steps]
+            if normalization_step is not None
+            else standardization_steps
+        )
         if standardized_mol is None:
             standardized_smiles = None
             properties = _standardization_failure_properties()
@@ -609,10 +750,20 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
                     "No evidence lookup was attempted because standardization failed."
                 ),
             )
+            bioactivity_evidence = BioactivityEvidence(
+                status=ResultStatus.NOT_APPLICABLE,
+                snapshot_id="not-applicable-standardization-failed",
+                snapshot_scope=(
+                    "No ChEMBL lookup was attempted because standardization failed."
+                ),
+                reason_code="NO_STANDARDIZED_STRUCTURE_FOR_CHEMBL",
+                reason="ChEMBL comparison requires a valid standardized molecular identity.",
+            )
         else:
             standardized_smiles = Chem.MolToSmiles(standardized_mol, isomericSmiles=True)
             evidence_resolution = resolve_property_evidence(standardized_smiles)
             properties = _properties(standardized_mol, evidence_resolution)
+            bioactivity_evidence = resolve_bioactivity_evidence(standardized_smiles)
 
     response_payload = {
         "label": request.label or "Untitled molecule",
@@ -625,11 +776,15 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         "issues": [issue.model_dump(mode="json") for issue in issues],
         "standardization_steps": [step.model_dump(mode="json") for step in steps],
         "properties": [prop.model_dump(mode="json") for prop in properties],
+        "bioactivity_evidence": bioactivity_evidence.model_dump(mode="json"),
     }
     manifest = create_manifest(
         request.model_dump(mode="json"),
         response_payload,
-        configuration_payload(evidence_resolution.snapshot_id),
+        configuration_payload(
+            f"properties={evidence_resolution.snapshot_id};"
+            f"bioactivity={bioactivity_evidence.snapshot_id}"
+        ),
         snapshot_id=evidence_resolution.snapshot_id,
         snapshot_scope=evidence_resolution.snapshot_scope,
     )
@@ -643,12 +798,13 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         standardized_smiles=standardized_smiles,
         depiction_svg=(
             _depict(depiction_mol, highlight_atoms, highlight_bonds)
-            if molecule is not None
+            if depiction_mol is not None
             else None
         ),
         issues=issues,
         standardization_steps=steps,
         properties=properties,
+        bioactivity_evidence=bioactivity_evidence,
         source=request.source,
         manifest=manifest,
     )

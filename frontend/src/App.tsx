@@ -21,6 +21,7 @@ import {
   extractMoleculeDocument,
   extractMoleculeImage,
   prepareImageExtractionEngine,
+  replayAnalysisRun,
 } from "./api/analysis";
 import type { ExtractedSourceCandidate, MoleculeCandidate, StepId } from "./domain";
 import { LiveMoleculeSvg } from "./LiveMoleculeSvg";
@@ -32,6 +33,7 @@ import type {
   AnalyzeResponse,
   ExtractionEngineStatus,
   ImageExtractionResponse,
+  ReplayVerification,
   RunResponse,
 } from "./schemas/analysis";
 import { SourceReviewDialog } from "./SourceReviewDialog";
@@ -93,6 +95,8 @@ export default function App() {
   const [selectedCandidateIndices, setSelectedCandidateIndices] = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [replaying, setReplaying] = useState(false);
+  const [replayVerification, setReplayVerification] = useState<ReplayVerification | null>(null);
   const [actionError, setActionError] = useState("");
   const [search, setSearch] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -630,6 +634,20 @@ export default function App() {
     }
   }
 
+  async function verifyReplay() {
+    if (!run) return;
+    setReplaying(true);
+    setReplayVerification(null);
+    setActionError("");
+    try {
+      setReplayVerification(await replayAnalysisRun(run.run_id));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "The replay verification could not be completed.");
+    } finally {
+      setReplaying(false);
+    }
+  }
+
   const pageTitle = step === "source" ? "Add a molecular source"
     : step === "confirm" ? collectionPreviews.length ? `Confirm ${collectionPreviews.length} candidates` : "Confirm a candidate"
       : step === "compare" ? "Compare structures"
@@ -675,6 +693,7 @@ export default function App() {
           fileError={fileError}
           fileNotice={fileNotice}
           fileHash={fileHash}
+          fileBusy={Boolean(file && !fileHash && !fileError) || extracting}
           label={draftLabel}
           smiles={draftSmiles}
           candidateCount={sourceCandidates.length}
@@ -712,9 +731,9 @@ export default function App() {
         {step === "confirm" && !collectionPreviews.length && preview && <section className="confirmation-screen"><div className="section-head"><div><h2>Source and candidate</h2><p>Confirm the transcription only after comparing it with its source.</p></div><span className="section-kicker">02 / CONFIRM</span></div><div className="confirm-grid"><div className="source-preview"><div className="panel-title"><FileImage size={17} /><strong>Original source</strong><span>{file?.name ?? "Direct SMILES"}</span></div><div className="document-surface">{fileUrl && file?.type.startsWith("image/") ? <img src={fileUrl} alt={`Uploaded source ${file.name}`} /> : fileUrl && file?.type === "application/pdf" ? <iframe src={fileUrl} title={`Uploaded source ${file.name}`} /> : <div className="direct-source-preview"><Atom size={58} /><strong>{sourceEntryTitle}</strong><code>{draftSmiles}</code><small>{sourceEntryNote}</small></div>}</div></div>
           <div className="candidate-card"><div className="panel-title"><Atom size={18} /><strong>RDKit candidate</strong><MoleculeStatusBadge status={preview.status} compact /></div><div className="candidate-visual">{preview.status === "invalid" ? <div className="computed-3d-state"><AlertCircle size={28} /><strong>Invalid structure</strong><span>Correct the submitted SMILES before it enters the run.</span></div> : <LiveMoleculeSvg svg={preview.depiction_svg} />}</div><div className="candidate-facts"><div><span>Label</span><strong>{preview.label}</strong></div><div><span>Formula</span><strong>{propertyValue(preview, "molecular_formula")}</strong></div><div><span>Molecular weight</span><strong>{propertyValue(preview, "molecular_weight")}</strong></div><div className="candidate-smiles"><span>Submitted SMILES</span><code>{preview.raw_input}</code></div></div><p className={`candidate-warning candidate-warning--${preview.status}`}><AlertCircle size={17} /> {preview.issues[0]?.explanation ?? "No blocking issue was detected by the configured ruleset."}</p><div className="candidate-actions"><button className="button button--primary" disabled={confirming || preview.status === "invalid"} onClick={() => void confirmCandidate()}><Check size={17} />{confirming ? "Saving run…" : editingIndex === null ? "Confirm and add to run" : "Confirm changes"}</button><button className="button button--quiet" onClick={() => setStep("source")}><Pencil size={17} /> Edit input</button><button className="button button--danger" onClick={() => { setPreview(null); setDraftSmiles(""); setStep("source"); }}><X size={16} /> Reject candidate</button></div></div></div></section>}
 
-        {(step === "validate" || step === "compare") && (selected ? <ValidationDesk step={step} molecules={molecules} selected={selected} filtered={filtered} search={search} onSearch={setSearch} onSelect={setSelectedId} onAddSource={() => { clearDraft(); setStep("source"); }} onEdit={editReviewedCandidate} onReviewSource={() => sourceDialogRef.current?.showModal()} /> : <div className="empty-run panel"><div><strong>No analyzed structures yet.</strong><span>Submit a source to create the first real run record.</span></div><button className="button button--primary" onClick={() => setStep("source")}>Add a molecular source</button></div>)}
+        {(step === "validate" || step === "compare") && (selected ? <ValidationDesk step={step} molecules={molecules} selected={selected} filtered={filtered} search={search} onSearch={setSearch} onSelect={setSelectedId} onAddSource={() => { clearDraft(); setStep("source"); }} onEdit={editReviewedCandidate} onReviewSource={() => sourceDialogRef.current?.showModal()} identityComparisons={run?.identity_comparisons ?? []} /> : <div className="empty-run panel"><div><strong>No analyzed structures yet.</strong><span>Submit a source to create the first real run record.</span></div><button className="button button--primary" onClick={() => setStep("source")}>Add a molecular source</button></div>)}
 
-        {step === "report" && <section className="report-screen panel"><div className="report-heading"><ShieldCheck size={26} /><div><h2>Reproducible PDF report</h2><p>{molecules.length} structures · {validCount} computable · {invalidCount} invalid</p></div></div>{run ? <><div className="report-grid"><div><strong>Run ID</strong><code>{run.run_id}</code></div><div><strong>Reference snapshot</strong><code>{selected?.manifest.snapshotId ?? "not-configured"}</code></div><div><strong>Input SHA-256</strong><code>{run.input_sha256}</code></div><div><strong>Output SHA-256</strong><code>{run.output_sha256}</code></div></div><p className="report-caveat">The PDF is generated by the backend from the stored run. It includes validation findings, property states, standardization steps and reproducibility hashes. No unavailable value is fabricated.</p><button className="button button--primary" disabled={downloading} onClick={() => void downloadPdf()}><Download size={17} /> {downloading ? "Generating PDF…" : "Download PDF report"}</button></> : <div className="empty-report"><strong>No run is available to report.</strong><button className="button button--primary" onClick={() => setStep("source")}>Start an analysis</button></div>}</section>}
+        {step === "report" && <section className="report-screen panel"><div className="report-heading"><ShieldCheck size={26} /><div><h2>Reproducible PDF report</h2><p>{molecules.length} structures · {validCount} computable · {invalidCount} invalid</p></div></div>{run ? <><div className="report-grid"><div><strong>Run ID</strong><code>{run.run_id}</code></div><div><strong>Reference snapshot</strong><code>{selected?.manifest.snapshotId ?? "not-configured"}</code></div><div><strong>Input SHA-256</strong><code>{run.input_sha256}</code></div><div><strong>Output SHA-256</strong><code>{run.output_sha256}</code></div><div><strong>Replay environment</strong><code>{run.environment?.environment_sha256 ?? "legacy run"}</code></div><div><strong>Locked runtime</strong><code>{run.environment ? `Python ${run.environment.python} · RDKit ${run.environment.rdkit} · ${run.environment.platform}/${run.environment.machine}` : "not recorded"}</code></div></div><p className="report-caveat">The PDF is generated by the backend from the stored run. It includes validation findings, identity verdicts, property states, standardization steps and reproducibility hashes. No unavailable value is fabricated.</p><div className="report-actions"><button className="button button--primary" disabled={downloading} onClick={() => void downloadPdf()}><Download size={17} /> {downloading ? "Generating PDF…" : "Download PDF report"}</button><button className="button button--quiet" disabled={replaying} onClick={() => void verifyReplay()}><ShieldCheck size={17} /> {replaying ? "Replaying…" : "Verify exact replay"}</button></div>{replayVerification ? <div className={`replay-verification replay-verification--${replayVerification.reproducible ? "match" : "mismatch"}`} role="status"><strong>{replayVerification.reproducible ? "Exact replay verified" : "Replay mismatch detected"}</strong><span>{replayVerification.status}</span><code>{replayVerification.actual_output_sha256}</code>{replayVerification.differences.map((difference) => <p key={difference}>{difference}</p>)}</div> : null}</> : <div className="empty-report"><strong>No run is available to report.</strong><button className="button button--primary" onClick={() => setStep("source")}>Start an analysis</button></div>}</section>}
       </main></div>
 
     {selected ? <SourceReviewDialog dialogRef={sourceDialogRef} molecule={selected} sourceUrl={selectedSource?.url ?? null} sourceFile={selectedSource?.file ?? null} sourceHash={selected.sourceFileSha256 ?? null} onReject={() => void rejectReviewedCandidate()} onEdit={editReviewedCandidate} onConfirm={() => sourceDialogRef.current?.close()} /> : null}

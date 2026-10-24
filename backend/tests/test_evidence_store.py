@@ -182,6 +182,21 @@ def test_structured_activity_search_filters_exact_entities(store: EvidenceStore)
     assert rows[0]["standard_unit"] == "nM"
     assert rows[0]["target_confidence_score"] == 9
 
+    filtered = store.structured_activity_search(
+        snapshot_id=SNAPSHOT_ID,
+        molecule_inchikey=INCHIKEY,
+        target_id="CHEMBL1862",
+        activity_id="CHEMBL-ACT-1",
+    )
+    missing = store.structured_activity_search(
+        snapshot_id=SNAPSHOT_ID,
+        molecule_inchikey=INCHIKEY,
+        target_id="CHEMBL1862",
+        activity_id="CHEMBL-ACT-missing",
+    )
+    assert [row["activity_id"] for row in filtered] == ["CHEMBL-ACT-1"]
+    assert missing == []
+
 
 def test_fts5_passage_search_returns_ranked_traceable_hit(store: EvidenceStore) -> None:
     seed_paper_and_passages(store)

@@ -1,10 +1,11 @@
 # ProvenanceLab Phase 1 chemistry contract
 
-**Contract status:** proposed implementation contract; chemistry-owner approval is pending.  
-**Toolkit baseline:** CPython 3.13.15 and RDKit 2026.09.1 in the project-local environment.  
+**Contract status:** approved by the project owner on 2026-10-25.
+
+**Toolkit baseline:** CPython 3.11.17 and RDKit 2026.09.1 in the locked replay environment.
 **Authority:** Product Requirements Document v1.0, sections 7, 8, 10, and 12.
 
-This document defines the behavior tested by the Phase 1 regression suite. Passing these tests proves consistency with this proposed contract in the pinned local environment; it does not constitute chemistry-owner approval or cross-version reproducibility.
+This document defines the behavior tested by the Phase 1 regression suite. The project owner approved all 31 expectations as one corpus on 2026-10-25. Passing the suite proves consistency with that approved contract; cross-machine verification additionally requires the recorded dependency-lock fingerprint to match.
 
 ## 1. Input, parsing, and classification
 
@@ -102,8 +103,8 @@ Canonical JSON uses Python's standard JSON encoder with:
 
 `output_sha256` covers the deterministic chemistry result payload used by the service: submitted label/input/source, classification, canonical and standardized structures, issues, standardization log, and computed/evidence observations. It excludes depiction SVG and the manifest itself. No wall-clock timestamp is currently present.
 
-Three identical runs in one pinned environment must produce identical issue ordering, transformations, property serialization, and all three hashes. This is not evidence of identical behavior across RDKit or Python versions.
+Every persisted run records a dependency-lock environment fingerprint. The replay endpoint recomputes the run and returns `MATCH` only when both that fingerprint and the canonical output hash match. A version or architecture change is reported explicitly as `ENVIRONMENT_MISMATCH` rather than silently accepted.
 
-## 8. Approval boundary
+## 8. Approval record
 
-All 31 corpus expectations are labelled `proposed`. No repository evidence shows chemistry-owner approval. Automated success therefore establishes an executable proposed baseline, while the release acceptance gate remains blocked until the decisions in `docs/phase-1-chemistry-decisions.md` are approved or amended and the corpus is rerun.
+All 31 corpus expectations were approved together by the project owner on 2026-10-25. The original per-case `expectation_status` fields remain as authorship provenance; the corpus-level `approval_state: approved` is authoritative. The approved behavior is versioned as `phase1-approved.1` and must pass the complete regression suite after any environment or chemistry-policy change.

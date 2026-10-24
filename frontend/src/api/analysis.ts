@@ -7,6 +7,7 @@ import type {
   DocumentExtractionResponse,
   ExtractionEngineStatus,
   ImageExtractionResponse,
+  ReplayVerification,
   RunResponse,
 } from "../schemas/analysis";
 
@@ -88,6 +89,14 @@ export async function downloadRunReport(runId: string): Promise<void> {
   anchor.download = `${runId}-report.pdf`;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+export async function replayAnalysisRun(runId: string): Promise<ReplayVerification> {
+  const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/replay`, {
+    method: "POST",
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+  return (await response.json()) as ReplayVerification;
 }
 
 export async function analyzeMolecule(

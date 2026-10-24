@@ -1,11 +1,12 @@
 # Phase 1 scientific review packet
 
 **Prepared:** 2026-10-24  
-**Review state:** ready to present to a chemistry owner; no scientific approval is recorded.  
-**Corpus state:** `proposed` at the corpus level and for all 31 cases.  
+**Review state:** historical pre-approval audit; superseded by the project-owner approval recorded on 2026-10-25.
+
+**Corpus state:** `approved` at corpus level as policy `phase1-approved.1`; per-case `proposed` values remain authorship provenance.
 **Corpus SHA-256 at review preparation:** `dab3f3cab2267d105cdd6da98227824758dc5a6eb3c1ccca87279a1b838a35c3`
 
-This packet audits the implemented proposal against the ProvenanceLab PRD and the checked-in tests. It is not an external scientific validation. Statements about exact RDKit transformations describe observed, version-pinned implementation behavior unless a decision is explicitly identified as a direct PRD requirement.
+This packet audits the implemented proposal against the ProvenanceLab PRD and the checked-in tests. It is not an external scientific validation. The later project-owner approval accepts all 31 expectations as the Phase 1 product contract; statements about exact RDKit transformations remain version-pinned implementation behavior.
 
 ## 1. Authority and review boundary
 
@@ -173,13 +174,11 @@ No concrete implementation defect was demonstrated during this review. The findi
 7. **Apply only approved amendments.** If review changes a proposed behavior, make the smallest implementation/fixture/test change, update policy version and decision record, then rerun the full backend suite and Ruff.
 8. **Promote governance state last.** Change `proposed` to `approved` only after the signed/recorded decisions and reviewed corpus hash exist and all amended tests pass.
 
-## 9. Remaining blockers
+## 9. Post-approval status
 
-- No chemistry owner is designated in the repository.
-- No qualified scientific approval or independent descriptor verification is recorded.
-- All 31 expectations and the corpus itself remain `proposed`.
-- Decisions `P1-D02`–`P1-D12` and chemistry aspects of `P1-D15`–`P1-D17` require specialist review.
-- Product/backend decisions remain open for ineffective stereo warnings, issue-location semantics, ambiguity propagation, formula unit representation, algorithm context, and hash boundaries.
-- The PRD's 31/31 scientific acceptance gate cannot be claimed until the reviewed expectations are approved and rerun.
+- The project owner approved all 31 expectations on 2026-10-25 as policy `phase1-approved.1`.
+- Explicit pairwise molecule-identity verdicts now remove the cross-input inference gap.
+- Exact dependency versions, runtime fingerprints, stored requests, and recomputation-based replay verification now close the replay-verification gap.
+- Independent external chemistry review is still advisable before scientific decision-making, but is not an open Phase 1 implementation item.
 
-This packet makes the implementation **ready to enter scientific approval**, but Phase 1 is not scientifically accepted yet.
+With the accepted corpus and passing verification suite, the declared Phase 1 product contract is complete.

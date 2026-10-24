@@ -50,6 +50,10 @@ _QUANTITATIVE_ACTIVITY = re.compile(
     r"(?P<unit>fM|pM|nM|uM|µM|μM|mM|M)\b",
     re.IGNORECASE,
 )
+_ACTIVITY_RECORD = re.compile(
+    r"\b(?:ChEMBL\s+)?activity(?:\s+record)?\s+(?P<activity_id>[0-9]+)\b",
+    re.IGNORECASE,
+)
 _POTENCY_BANDS = {
     "picomolar": (1e-12, 1e-9),
     "nanomolar": (1e-9, 1e-6),
@@ -477,6 +481,8 @@ class StructuredAssayPacketBuilder:
             return EvidencePacket(statement=canonical_statement, resolution=resolution)
 
         constraint = parse_activity_constraint(canonical_statement)
+        record_match = _ACTIVITY_RECORD.search(canonical_statement.text)
+        activity_id = record_match.group("activity_id") if record_match else None
         evidence: list[EvidenceItem] = []
         remaining = self._result_limit
         for snapshot_id in self._snapshot_ids:
@@ -488,6 +494,7 @@ class StructuredAssayPacketBuilder:
                 target_id=resolution.target_id,
                 endpoint=resolution.endpoint,
                 organism=resolution.organism,
+                activity_id=activity_id,
                 limit=remaining,
             )
             evidence.extend(

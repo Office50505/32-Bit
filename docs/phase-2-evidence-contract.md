@@ -4,9 +4,8 @@
 **Scope:** typed claim decomposition, structured assay/run/passage evidence packets, assay
 comparison, deterministic verdict validation, fail-closed local-model orchestration, confidence
 scoring, and research-aid output labelling.
-**Not yet complete:** acquisition of the reviewed frozen source files, the final combined pilot
-bundle, reviewed pilot scope, passage entailment, API/UI exposure, and the locked 150-claim
-evaluation.
+**Not yet complete:** acquisition of the final reviewed source bundle, reviewed pilot scope,
+passage entailment and evaluation against the scientifically reviewed 150-claim gold set.
 
 ## 1. Authority boundary
 
@@ -184,7 +183,8 @@ Before an API endpoint is exposed, the project must add:
    use the numbered full-release database), then build and integration-test the combined sealed
    pilot database;
 2. define a reviewed pilot selection independently of the locked 150 evaluation claims;
-3. supply and freeze the 150-claim gold set with reviewer labels and evidence references;
+3. preserve the signed 150-claim gold set in `backend/evaluation/phase2_150_claims/` without
+   changing its approved hash;
 4. add a benchmarked passage-entailment step or explicitly keep literature claims
    abstention-only;
 5. calibrate confidence and run the retrieval-plus-LLM baseline on that locked set;

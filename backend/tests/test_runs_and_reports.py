@@ -22,10 +22,36 @@ def test_run_is_persisted_and_retrievable() -> None:
     run = response.json()
     assert run["run_id"].startswith("PLR-")
     assert run["results"][0]["status"] == "valid"
+    assert run["environment"]["python"]
+    assert run["environment"]["rdkit"]
+    assert len(run["environment"]["dependency_lock_sha256"]) == 64
+    assert len(run["environment"]["environment_sha256"]) == 64
 
     retrieved = client.get(f"/api/runs/{run['run_id']}")
     assert retrieved.status_code == 200
     assert retrieved.json() == run
+
+
+def test_run_replay_verifies_environment_and_output() -> None:
+    run = client.post(
+        "/api/runs",
+        json={
+            "molecules": [
+                {"structure": "CCO", "label": "Ethanol A"},
+                {"structure": "OCC", "label": "Ethanol B"},
+            ]
+        },
+    ).json()
+    assert run["identity_comparisons"][0]["relationship"] == "EXACT_SAME_STRUCTURE"
+
+    replay = client.post(f"/api/runs/{run['run_id']}/replay")
+    assert replay.status_code == 200
+    verification = replay.json()
+    assert verification["status"] == "MATCH"
+    assert verification["reproducible"] is True
+    assert verification["expected_output_sha256"] == run["output_sha256"]
+    assert verification["actual_output_sha256"] == run["output_sha256"]
+    assert verification["differences"] == []
 
 
 def test_pdf_report_is_deterministic_and_downloadable() -> None:

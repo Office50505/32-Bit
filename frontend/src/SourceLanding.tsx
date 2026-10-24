@@ -1,5 +1,5 @@
 import type { ChangeEvent, DragEvent, FormEvent } from "react";
-import { ArrowRight, FileCheck2, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { ArrowRight, FileCheck2, FileSpreadsheet, LoaderCircle, UploadCloud } from "lucide-react";
 
 import Molecule3D from "./Molecule3D";
 
@@ -8,6 +8,7 @@ interface SourceLandingProps {
   fileError: string;
   fileNotice: string;
   fileHash: string | null;
+  fileBusy: boolean;
   label: string;
   smiles: string;
   candidateCount: number;
@@ -43,6 +44,7 @@ export function SourceLanding({
   fileError,
   fileNotice,
   fileHash,
+  fileBusy,
   label,
   smiles,
   candidateCount,
@@ -57,9 +59,23 @@ export function SourceLanding({
   const previewLabel = cleanSmiles ? label.trim() || "Untitled molecule" : DEFAULT_PREVIEW.label;
   const previewZoom = Math.max(0.76, Math.min(1.28, 1.42 - Math.max(0, previewSmiles.length - 5) * 0.04));
   const hashPending = Boolean(file && !fileHash && !fileError);
-  const canReview = Boolean((cleanSmiles || candidateCount) && !hashPending && !extracting && !reviewing);
+  const canReview = Boolean(
+    (cleanSmiles || candidateCount)
+      && !fileBusy
+      && !hashPending
+      && !extracting
+      && !reviewing,
+  );
   const formulaSuggestion = FORMULA_TO_SMILES[cleanSmiles.toUpperCase()];
   const csvSelected = Boolean(file && (/\.csv$/i.test(file.name) || file.type === "text/csv"));
+  const documentSelected = Boolean(file && !csvSelected);
+  const documentBusy = documentSelected && fileBusy;
+  const csvBusy = csvSelected && fileBusy;
+  const documentBusyLabel = file?.type === "application/pdf" || /\.pdf$/i.test(file?.name ?? "")
+    ? "Processing PDF…"
+    : fileHash
+      ? "Extracting image…"
+      : "Processing image…";
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,7 +116,9 @@ export function SourceLanding({
 
             <div className="source-hero__actions">
               <label
-                className={`source-upload${file && !csvSelected ? " source-upload--selected" : ""}`}
+                className={`source-upload${documentSelected ? " source-upload--selected" : ""}${documentBusy ? " source-upload--busy" : ""}`}
+                aria-busy={documentBusy}
+                aria-disabled={documentBusy}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={handleDrop}
               >
@@ -110,29 +128,43 @@ export function SourceLanding({
                   accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
                   aria-label="Upload a PDF or molecular image"
                   aria-describedby={fileError ? "source-file-error" : "source-file-help"}
+                  disabled={documentBusy}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     void onFileSelect(event.target.files?.[0]);
                     event.target.value = "";
                   }}
                 />
-                {file && !csvSelected ? <FileCheck2 size={18} strokeWidth={1.7} /> : <UploadCloud size={18} strokeWidth={1.7} />}
-                <strong>{file && !csvSelected ? file.name : "PDF / image"}</strong>
+                {documentBusy
+                  ? <LoaderCircle className="source-upload__spinner" size={18} aria-hidden="true" />
+                  : documentSelected
+                    ? <FileCheck2 size={18} strokeWidth={1.7} />
+                    : <UploadCloud size={18} strokeWidth={1.7} />}
+                <strong aria-live="polite">{documentBusy ? documentBusyLabel : documentSelected ? file?.name : "PDF / image"}</strong>
               </label>
 
-              <label className={`source-upload${csvSelected ? " source-upload--selected" : ""}`}>
+              <label
+                className={`source-upload${csvSelected ? " source-upload--selected" : ""}${csvBusy ? " source-upload--busy" : ""}`}
+                aria-busy={csvBusy}
+                aria-disabled={csvBusy}
+              >
                 <input
                   className="source-upload__input"
                   type="file"
                   accept="text/csv,application/csv,.csv"
                   aria-label="Upload a CSV file"
                   aria-describedby={fileError ? "source-file-error" : "source-file-help"}
+                  disabled={csvBusy}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     void onFileSelect(event.target.files?.[0]);
                     event.target.value = "";
                   }}
                 />
-                {csvSelected ? <FileCheck2 size={18} strokeWidth={1.7} /> : <FileSpreadsheet size={18} strokeWidth={1.7} />}
-                <strong>{csvSelected ? file?.name : "Upload CSV"}</strong>
+                {csvBusy
+                  ? <LoaderCircle className="source-upload__spinner" size={18} aria-hidden="true" />
+                  : csvSelected
+                    ? <FileCheck2 size={18} strokeWidth={1.7} />
+                    : <FileSpreadsheet size={18} strokeWidth={1.7} />}
+                <strong aria-live="polite">{csvBusy ? "Processing CSV…" : csvSelected ? file?.name : "Upload CSV"}</strong>
               </label>
 
               <button className="source-hero__submit" type="submit" disabled={!canReview}>

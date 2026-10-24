@@ -218,6 +218,14 @@
   display: block;
 }
 
+.extraction-progress {
+  display: block;
+  width: min(420px, 100%);
+  height: 6px;
+  margin-top: 8px;
+  accent-color: #0d9488;
+}
+
 .extraction-state strong {
   color: #294957;
   font-size: 11px;
@@ -1772,6 +1780,19 @@ select:focus-visible {
   background: #f1fbf9;
 }
 
+.source-upload--busy {
+  border-color: #168c96;
+  background: #eef9fb;
+  color: #087487;
+  cursor: progress;
+}
+
+.source-upload--busy:hover {
+  border-color: #168c96;
+  background: #eef9fb;
+  color: #087487;
+}
+
 .source-upload__input {
   position: absolute;
   width: 1px;
@@ -1796,6 +1817,10 @@ select:focus-visible {
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
+}
+
+.source-upload__spinner {
+  animation: extraction-spin 0.9s linear infinite;
 }
 
 .source-hero__error {

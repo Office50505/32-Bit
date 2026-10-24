@@ -1,5 +1,7 @@
+from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api import routes
@@ -21,6 +23,11 @@ from app.models.evidence_assistant import (
 from app.services.evidence_runtime import EvidenceRuntimeError
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_claim_run_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PROVENANCELAB_CLAIM_RUN_DB", str(tmp_path / "claim-runs.sqlite3"))
 
 
 def _response(claim: str) -> ClaimCheckResponse:
@@ -81,6 +88,24 @@ def test_evidence_endpoint_returns_typed_research_aid_response(monkeypatch) -> N
     assert body["verdicts"][0]["verdict"] == "INSUFFICIENT_EVIDENCE"
     assert body["research_aid_notice"].startswith("Research aid only")
     assert body["manifest"]["model_name"] == "qwen3:4b-instruct"
+
+    stored = client.get(f"/api/evidence/runs/{body['assistant_run_id']}")
+    assert stored.status_code == 200
+    assert stored.json() == body
+
+
+def test_abstention_is_persisted_with_an_auditable_run_citation(monkeypatch) -> None:
+    monkeypatch.setattr(routes, "get_evidence_runtime", lambda: _FakeRuntime())
+    response = client.post(
+        "/api/evidence/check",
+        json={"claim": "Imatinib inhibits ABL1."},
+    )
+    body = response.json()
+
+    assert body["verdicts"][0]["verdict"] == "INSUFFICIENT_EVIDENCE"
+    assert body["verdicts"][0]["citations"] == []
+    assert body["assistant_run_id"] == "EA-test"
+    assert client.get("/api/evidence/runs/EA-test").status_code == 200
 
 
 def test_evidence_endpoint_rejects_blank_claim() -> None:

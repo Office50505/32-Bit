@@ -1,6 +1,6 @@
-CHEMISTRY_POLICY_VERSION = "phase1-proposed.1"
-VALIDATION_POLICY_VERSION = "rdkit-structured-problems-v1"
-OUTPUT_SCHEMA_VERSION = "analysis-response-v1"
+CHEMISTRY_POLICY_VERSION = "phase1-approved.1"
+VALIDATION_POLICY_VERSION = "rdkit-structured-problems-v2"
+OUTPUT_SCHEMA_VERSION = "analysis-response-v2-identity-replay"
 CANONICAL_SERIALIZATION_VERSION = "json-sort-keys-compact-utf8-finite-v1"
 
 VALIDATION_CONFIGURATION = {
@@ -14,6 +14,24 @@ VALIDATION_CONFIGURATION = {
     ],
     "stereo_detector": "Chem.FindPotentialStereo",
     "unspecified_stereo_is_ambiguous": True,
+}
+
+INPUT_NORMALIZATION_CONFIGURATION = {
+    "non_ring_aromatic_atom_case": {
+        "enabled": True,
+        "trigger": "lowercase aromatic atom outside a ring",
+        "action": "clear aromatic flags and interpret the affected atoms as aliphatic",
+        "preserve_raw_input": True,
+        "emit_audit_issue": "ATOM_CASE_NORMALIZED",
+        "emit_audit_step": "NORMALIZE_NON_RING_ATOM_CASE",
+    }
+}
+
+DEPICTION_CONFIGURATION = {
+    "atom_palette": "black-and-white",
+    "normal_bonds": "neutral",
+    "validation_highlight_rgba": [0.82, 0.08, 0.16, 1.0],
+    "reason": "reserve red for explicit validation findings",
 }
 
 STANDARDIZATION_CONFIGURATION = (

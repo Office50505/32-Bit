@@ -8,7 +8,9 @@ from rdkit import rdBase
 from app.core.chemistry_config import (
     CANONICAL_SERIALIZATION_VERSION,
     CHEMISTRY_POLICY_VERSION,
+    DEPICTION_CONFIGURATION,
     DESCRIPTOR_CONFIGURATION,
+    INPUT_NORMALIZATION_CONFIGURATION,
     OUTPUT_SCHEMA_VERSION,
     STANDARDIZATION_CONFIGURATION,
     VALIDATION_CONFIGURATION,
@@ -16,8 +18,8 @@ from app.core.chemistry_config import (
 )
 from app.models.analysis import RunManifest, ToolVersions
 
-PIPELINE_VERSION = "0.2.0"
-RULESET_VERSION = "hm-01.2-proposed"
+PIPELINE_VERSION = "0.3.0"
+RULESET_VERSION = "hm-01.3-approved"
 SNAPSHOT_ID = "not-configured"
 SNAPSHOT_SCOPE = "No frozen PubChem or ChEMBL snapshot is configured in this build."
 
@@ -55,6 +57,8 @@ def configuration_payload(snapshot_id: str = SNAPSHOT_ID) -> dict[str, Any]:
             key: list(value) if isinstance(value, list) else value
             for key, value in VALIDATION_CONFIGURATION.items()
         },
+        "input_normalization": INPUT_NORMALIZATION_CONFIGURATION,
+        "depiction": DEPICTION_CONFIGURATION,
         "standardization": [dict(step) for step in STANDARDIZATION_CONFIGURATION],
         "descriptors": [dict(descriptor) for descriptor in DESCRIPTOR_CONFIGURATION],
         "rdkit": rdBase.rdkitVersion,

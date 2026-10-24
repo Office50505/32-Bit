@@ -3,11 +3,11 @@ import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from
 import { ArrowUp, ShieldCheck, X } from "lucide-react";
 
 import { askBenzo } from "./api/benzo";
-import type { BenzoChatResponse } from "./schemas/benzo";
+import type { BenzoEvidenceResponse, EvidenceCitation, EvidenceVerdict } from "./schemas/benzo";
 
 type ConversationItem =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; response: BenzoChatResponse }
+  | { id: number; role: "assistant"; response: BenzoEvidenceResponse }
   | { id: number; role: "notice"; text: string }
   | { id: number; role: "error"; text: string };
 
@@ -81,21 +81,53 @@ function isGreeting(value: string): boolean {
   return /^(?:hi|hey|hello|yo|good\s+(?:morning|afternoon|evening))[!.\s]*$/i.test(value);
 }
 
-function AssistantResponse({ response }: { response: BenzoChatResponse }) {
-  return <div className={`benzo-response benzo-response--${response.scope.toLowerCase()}`}>
+function verdictLabel(verdict: EvidenceVerdict): string {
+  return {
+    SUPPORTED: "Supported",
+    CONTRADICTED: "Contradicted",
+    INSUFFICIENT_EVIDENCE: "Insufficient evidence",
+    OUT_OF_SCOPE: "Out of scope",
+  }[verdict];
+}
+
+function Citation({ citation }: { citation: EvidenceCitation }) {
+  const measurement = citation.value === null || citation.value === undefined
+    ? null
+    : `${citation.relation ?? ""}${citation.value}${citation.unit ? ` ${citation.unit}` : ""}`;
+  return <li className="benzo-citation">
+    <div><strong>{citation.source_type.replaceAll("_", " ")}</strong><span>{citation.stance}</span></div>
+    <code>{citation.evidence_id}</code>
+    <p>{citation.paper_id ? `${citation.paper_id} · ${citation.passage_locator}` : citation.source_record_id}{citation.endpoint ? ` · ${citation.endpoint}` : ""}{measurement ? ` · ${measurement}` : ""}</p>
+    {citation.passage_text ? <blockquote>{citation.passage_text}</blockquote> : null}
+    <small>Snapshot {citation.snapshot_id} · SHA-256 {citation.raw_record_sha256.replace(/^sha256:/, "").slice(0, 16)}… · {citation.retraction_status}</small>
+  </li>;
+}
+
+function AssistantResponse({ response }: { response: BenzoEvidenceResponse }) {
+  return <div className="benzo-response benzo-response--evidence">
     <div className="benzo-response__meta">
-      <span className="benzo-response__badge">
-        {response.scope === "ANSWERED" ? "Molecular guidance" : "Project scope only"}
-      </span>
+      <span className="benzo-response__badge">Qwen evidence check</span>
+      <span className="benzo-response__model">{response.manifest.model_name}</span>
     </div>
-    <p className="benzo-response__answer">{response.answer}</p>
-    {response.suggestions.length ? <div className="benzo-structure-suggestions" aria-label="Structure suggestions">
-      {response.suggestions.map((suggestion, index) => <article className="benzo-structure-suggestion" key={`${suggestion.title}-${index}`}>
-        <strong>{suggestion.title}</strong>
-        <p>{suggestion.detail}</p>
-        {suggestion.smiles ? <code>{suggestion.smiles}</code> : null}
-      </article>)}
-    </div> : null}
+    <div className="benzo-verdicts">{response.verdicts.map((item) => <article className="benzo-verdict" key={item.statement.statement_id}>
+      <header>
+        <span>{item.statement.statement_id} · {item.statement.claim_type.replaceAll("_", " ")}</span>
+        <mark data-verdict={item.verdict}>{verdictLabel(item.verdict)}</mark>
+      </header>
+      <h4>{item.statement.text}</h4>
+      <p>{item.reason}</p>
+      {item.reason_codes.length ? <div className="benzo-reason-codes">{item.reason_codes.map((code) => <code key={code}>{code}</code>)}</div> : null}
+      {item.conflict_summary ? <div className="benzo-conflict"><strong>Assay conflict</strong><p>{item.conflict_summary}</p></div> : null}
+      <div className="benzo-confidence">
+        <strong>{item.confidence.level.toLowerCase()} confidence</strong>
+        <span>{item.confidence.method}</span>
+        {item.confidence.benchmark_accuracy !== null && item.confidence.benchmark_accuracy !== undefined ? <small>{Math.round(item.confidence.benchmark_accuracy * 100)}% locked-set accuracy · n={item.confidence.benchmark_case_count}</small> : <small>Accuracy by confidence is pending locked-set calibration.</small>}
+      </div>
+      {item.citations.length ? <div className="benzo-citations"><strong>Citations</strong><ol>{item.citations.map((citation) => <Citation key={citation.evidence_id} citation={citation} />)}</ol></div> : <p className="benzo-no-citation">No eligible scientific citation was available; the immutable claim-check run below audits this verdict.</p>}
+      {item.limitations.length ? <ul className="benzo-limitations">{item.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul> : null}
+    </article>)}</div>
+    <p className="benzo-safety-notice"><ShieldCheck size={14} /> {response.research_aid_notice}</p>
+    <dl className="benzo-run-citation"><div><dt>Run citation</dt><dd><code>{response.assistant_run_id}</code></dd></div><div><dt>Evidence snapshot</dt><dd><code>{response.manifest.evidence_snapshot_id}</code></dd></div><div><dt>Output SHA-256</dt><dd><code>{response.manifest.output_sha256}</code></dd></div></dl>
   </div>;
 }
 
@@ -254,7 +286,7 @@ export function BenzoAssistant({ currentSmiles }: { currentSmiles?: string | nul
     >
       <header className="benzo-header">
         <AnimatedBenzoMascot />
-        <div><strong>Ask Benzo</strong></div>
+        <div><strong>Ask Benzo</strong><span><i /> Qwen · frozen evidence</span></div>
         <button type="button" onClick={() => setOpen(false)} aria-label="Close Benzo assistant">
           <X size={18} />
         </button>
@@ -276,7 +308,7 @@ export function BenzoAssistant({ currentSmiles }: { currentSmiles?: string | nul
           : item.role === "error"
             ? <div key={item.id} className="benzo-message benzo-message--error"><strong>Couldn’t answer that</strong><span>{item.text}</span></div>
             : <AssistantResponse key={item.id} response={item.response} />)}
-        {checking ? <div className="benzo-thinking" role="status"><AnimatedBenzoMascot /><span>Benzo is checking the molecule and project context…</span></div> : null}
+        {checking ? <div className="benzo-thinking" role="status"><AnimatedBenzoMascot /><span>Qwen is splitting the claim and checking frozen evidence…</span></div> : null}
       </div>
 
       <form className="benzo-composer" onSubmit={(event) => void submitClaim(event)}>
@@ -301,7 +333,7 @@ export function BenzoAssistant({ currentSmiles }: { currentSmiles?: string | nul
           </button>
         </div>
       </form>
-      <footer className="benzo-disclaimer"><ShieldCheck size={14} /> Project-scoped guidance. Validate suggested structures before use.</footer>
+      <footer className="benzo-disclaimer"><ShieldCheck size={14} /> Research aid only. This report summarizes available evidence and is not a prediction of clinical efficacy or safety.</footer>
     </section> : null}
 
     <button

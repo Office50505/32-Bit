@@ -38,6 +38,14 @@ def test_impossible_valence_is_not_computed() -> None:
     assert all(item["computed"]["status"] == "INVALID_INPUT" for item in result["properties"])
 
 
+def test_depiction_reserves_red_for_validation_findings() -> None:
+    valid = analyze("COC(=O)c1ccccc1", "Methyl benzoate")
+    invalid = analyze("C[O](C)C", "Impossible oxygen")
+
+    assert "#FF0000" not in valid["depiction_svg"]
+    assert "#D11428" in invalid["depiction_svg"]
+
+
 def test_unassigned_stereochemistry_is_ambiguous() -> None:
     result = analyze("CCC(O)C", "2-butanol")
     assert result["status"] == "ambiguous"

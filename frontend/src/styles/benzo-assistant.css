@@ -337,6 +337,8 @@
 .benzo-response__meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .benzo-response__badge {
@@ -361,6 +363,168 @@
   font-size: 11px;
   line-height: 1.55;
 }
+
+.benzo-response__model {
+  overflow: hidden;
+  color: var(--benzo-muted);
+  font: 8px/1.3 Consolas, "SFMono-Regular", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.benzo-verdicts {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.benzo-verdict {
+  border: 1px solid #dce7ee;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdfe;
+}
+
+.benzo-verdict > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.benzo-verdict > header > span {
+  color: var(--benzo-muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.benzo-verdict mark {
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #e2f5ef;
+  color: #08786e;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.benzo-verdict mark[data-verdict="CONTRADICTED"] {
+  background: #ffe7eb;
+  color: #b71f47;
+}
+
+.benzo-verdict mark[data-verdict="INSUFFICIENT_EVIDENCE"] {
+  background: #fff0d8;
+  color: #925804;
+}
+
+.benzo-verdict mark[data-verdict="OUT_OF_SCOPE"] {
+  background: #e9edf1;
+  color: #53616d;
+}
+
+.benzo-verdict h4 {
+  margin: 9px 0 5px;
+  color: var(--benzo-ink);
+  font: 800 11px/1.4 Georgia, "Times New Roman", serif;
+}
+
+.benzo-verdict > p,
+.benzo-conflict p {
+  margin: 0;
+  color: var(--benzo-ink-soft, #29435b);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.benzo-reason-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.benzo-reason-codes code {
+  border-radius: 4px;
+  padding: 3px 5px;
+  background: #eef3f6;
+  color: #597080;
+  font-size: 7px;
+}
+
+.benzo-conflict {
+  margin-top: 8px;
+  border-left: 3px solid #d7891b;
+  padding: 7px 8px;
+  background: #fff8e9;
+}
+
+.benzo-conflict strong,
+.benzo-citations > strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #714c13;
+  font-size: 9px;
+}
+
+.benzo-confidence {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  margin-top: 8px;
+  border-radius: 7px;
+  padding: 7px 8px;
+  background: #edf8f6;
+  color: #246e68;
+  font-size: 8px;
+}
+
+.benzo-confidence strong { text-transform: capitalize; }
+.benzo-confidence small { grid-column: 1 / -1; }
+
+.benzo-citations { margin-top: 9px; }
+.benzo-citations > strong { color: var(--benzo-ink); }
+.benzo-citations ol { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+.benzo-citation {
+  border: 1px solid #deeaee;
+  border-radius: 7px;
+  padding: 7px;
+  background: #fff;
+}
+
+.benzo-citation > div { display: flex; justify-content: space-between; gap: 8px; font-size: 8px; }
+.benzo-citation > div span { color: #597785; font-weight: 800; }
+.benzo-citation > code { display: block; margin-top: 5px; overflow-wrap: anywhere; color: #315d70; font-size: 7px; }
+.benzo-citation p,
+.benzo-citation small { display: block; margin: 5px 0 0; color: var(--benzo-muted); font-size: 8px; line-height: 1.4; }
+.benzo-citation blockquote { margin: 6px 0 0; border-left: 2px solid #a8d6dd; padding-left: 7px; color: #425e6b; font-size: 8px; line-height: 1.45; }
+
+.benzo-no-citation { margin-top: 8px !important; color: #7a6750 !important; font-style: italic; }
+.benzo-limitations { margin: 8px 0 0; padding-left: 15px; color: var(--benzo-muted); font-size: 8px; line-height: 1.45; }
+
+.benzo-safety-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0 0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #eef8f6;
+  color: #2f716d;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.benzo-safety-notice svg { flex: 0 0 auto; }
+
+.benzo-run-citation { margin: 9px 0 0; }
+.benzo-run-citation > div { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 7px; border-top: 1px solid #edf1f3; padding: 5px 0; }
+.benzo-run-citation dt { color: var(--benzo-muted); font-size: 8px; }
+.benzo-run-citation dd { min-width: 0; margin: 0; }
+.benzo-run-citation code { display: block; overflow-wrap: anywhere; color: #31596a; font-size: 7px; }
 
 .benzo-structure-suggestions {
   display: grid;

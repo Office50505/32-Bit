@@ -20,6 +20,14 @@ class MoleculeStatus(StrEnum):
     INVALID = "invalid"
 
 
+class MoleculeRelationship(StrEnum):
+    EXACT_SAME_STRUCTURE = "EXACT_SAME_STRUCTURE"
+    SAME_STANDARDIZED_PARENT = "SAME_STANDARDIZED_PARENT"
+    STEREOISOMERS = "STEREOISOMERS"
+    DIFFERENT_STRUCTURE = "DIFFERENT_STRUCTURE"
+    INDETERMINATE = "INDETERMINATE"
+
+
 class ResultStatus(StrEnum):
     AVAILABLE = "AVAILABLE"
     INVALID_INPUT = "INVALID_INPUT"
@@ -100,6 +108,22 @@ class SourceMentionMetadata(ApiModel):
     row: int | None = Field(default=None, ge=2)
     locator: str | None = Field(default=None, max_length=200)
     excerpt: str | None = Field(default=None, max_length=600)
+
+
+class BioactivityEvidence(ApiModel):
+    source: Literal["ChEMBL"] = "ChEMBL"
+    status: ResultStatus
+    molecule_chembl_id: str | None = None
+    preferred_name: str | None = None
+    release: str | None = None
+    activity_count: int | None = Field(default=None, ge=0)
+    snapshot_id: str
+    snapshot_scope: str
+    retrieved_at: str | None = None
+    source_url: str | None = None
+    response_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    reason_code: str
+    reason: str
 
 
 class SourceMetadata(ApiModel):
@@ -230,6 +254,7 @@ class AnalyzeResponse(ApiModel):
     issues: list[ValidationIssue]
     standardization_steps: list[StandardizationStep]
     properties: list[PropertyComparison]
+    bioactivity_evidence: BioactivityEvidence
     source: SourceMetadata | None = None
     manifest: RunManifest
 
@@ -238,16 +263,54 @@ class BatchAnalyzeRequest(ApiModel):
     molecules: list[AnalyzeRequest] = Field(min_length=1, max_length=100)
 
 
+class MoleculeIdentityComparison(ApiModel):
+    left_index: int = Field(ge=0)
+    right_index: int = Field(ge=0)
+    relationship: MoleculeRelationship
+    reason_code: str
+    reason: str
+    left_standardized_smiles: str | None = None
+    right_standardized_smiles: str | None = None
+
+
 class BatchAnalyzeResponse(ApiModel):
     results: list[AnalyzeResponse]
+    identity_comparisons: list[MoleculeIdentityComparison] = Field(default_factory=list)
+
+
+class ReplayEnvironment(ApiModel):
+    python: str
+    rdkit: str
+    platform: str
+    machine: str
+    dependency_lock_sha256: str
+    environment_sha256: str
 
 
 class RunResponse(ApiModel):
     run_id: str
     results: list[AnalyzeResponse]
+    identity_comparisons: list[MoleculeIdentityComparison] = Field(default_factory=list)
     input_sha256: str
     configuration_sha256: str
     output_sha256: str
+    environment: ReplayEnvironment | None = None
+
+
+class ReplayVerification(ApiModel):
+    run_id: str
+    status: Literal[
+        "MATCH",
+        "ENVIRONMENT_MISMATCH",
+        "OUTPUT_MISMATCH",
+        "LEGACY_RUN_NO_ENVIRONMENT",
+    ]
+    reproducible: bool
+    expected_output_sha256: str
+    actual_output_sha256: str
+    expected_environment_sha256: str | None = None
+    actual_environment_sha256: str
+    differences: list[str] = Field(default_factory=list)
 
 
 class ApiErrorItem(ApiModel):

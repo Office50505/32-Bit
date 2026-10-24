@@ -222,6 +222,27 @@ def test_matching_assays_with_opposite_stance_force_abstention(
     assert "COMPARABLE_ASSAY_CONFLICT_REQUIRES_ABSTENTION" in error.value.violations
 
 
+def test_record_specific_claim_uses_only_the_named_activity(
+    store: EvidenceStore,
+) -> None:
+    add_activity(store, suffix="13370906", value=19.9)
+    add_activity(store, suffix="other", value=42, unit="uM")
+    # ChEMBL imports preserve the numeric activity ID without the test helper's prefix.
+    store._connection.execute(  # noqa: SLF001 - fixture setup verifies imported-ID behavior
+        "UPDATE activities SET activity_id = '13370906' WHERE activity_id = 'ACT-13370906'"
+    )
+    store._connection.commit()  # noqa: SLF001 - fixture setup
+
+    packet = build_packet(
+        store,
+        "ChEMBL activity record 13370906 reports an Imatinib IC50 of 19.9 nM against ABL1.",
+    )
+
+    assert [item.source_record_id for item in packet.evidence_items] == ["13370906"]
+    assert packet.evidence_items[0].stance == EvidenceStance.SUPPORTS
+    assert not packet.conflict_assessment.decision_conflict
+
+
 def test_context_difference_is_reported_without_false_direct_conflict(
     store: EvidenceStore,
 ) -> None:

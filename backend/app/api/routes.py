@@ -18,14 +18,20 @@ from app.models.analysis import (
     ExtractionEngineStatus,
     HealthResponse,
     ImageExtractionResponse,
+    ReplayVerification,
     RunResponse,
 )
-from app.models.benzo import BenzoChatRequest, BenzoChatResponse
 from app.models.evidence_assistant import ClaimCheckRequest, ClaimCheckResponse
 from app.services.chemistry import analyze_structure
+from app.services.claim_runs import (
+    ClaimRunIntegrityError,
+    get_claim_check_run,
+    persist_claim_check_run,
+)
 from app.services.conformers import generate_conformer
 from app.services.document_extraction import MAX_PDF_BYTES, extract_pdf_candidates
 from app.services.evidence_runtime import EvidenceRuntimeError, get_evidence_runtime
+from app.services.identity import pairwise_identity_comparisons
 from app.services.image_recognition import (
     MAX_IMAGE_BYTES,
     extraction_engine_status,
@@ -33,9 +39,8 @@ from app.services.image_recognition import (
     recognize_image,
 )
 from app.services.ollama import OllamaError
-from app.services.openai_benzo import BenzoServiceError, get_benzo_assistant
 from app.services.report import build_run_pdf
-from app.services.runs import create_run, get_run
+from app.services.runs import create_run, get_run, replay_run
 
 router = APIRouter(prefix="/api")
 
@@ -60,7 +65,11 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 
 @router.post("/analyze/batch", response_model=BatchAnalyzeResponse)
 def analyze_batch(request: BatchAnalyzeRequest) -> BatchAnalyzeResponse:
-    return BatchAnalyzeResponse(results=[analyze_structure(item) for item in request.molecules])
+    results = [analyze_structure(item) for item in request.molecules]
+    return BatchAnalyzeResponse(
+        results=results,
+        identity_comparisons=pairwise_identity_comparisons(results),
+    )
 
 
 @router.post("/conformer", response_model=Conformer3D)
@@ -71,17 +80,24 @@ def create_conformer(request: ConformerRequest) -> Conformer3D:
 @router.post("/evidence/check", response_model=ClaimCheckResponse)
 def check_evidence_claim(request: ClaimCheckRequest) -> ClaimCheckResponse:
     try:
-        return get_evidence_runtime().check_claim(request)
-    except (EvidenceRuntimeError, EvidenceStoreError, OllamaError) as error:
+        response = get_evidence_runtime().check_claim(request)
+        persist_claim_check_run(request, response)
+        return response
+    except (
+        ClaimRunIntegrityError,
+        EvidenceRuntimeError,
+        EvidenceStoreError,
+        OllamaError,
+    ) as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 
-@router.post("/benzo/chat", response_model=BenzoChatResponse)
-def chat_with_benzo(request: BenzoChatRequest) -> BenzoChatResponse:
-    try:
-        return get_benzo_assistant().answer(request)
-    except BenzoServiceError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+@router.get("/evidence/runs/{assistant_run_id}", response_model=ClaimCheckResponse)
+def read_evidence_claim_run(assistant_run_id: str) -> ClaimCheckResponse:
+    response = get_claim_check_run(assistant_run_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail="The requested claim-check run does not exist.")
+    return response
 
 
 @router.get("/extract/image/engine", response_model=ExtractionEngineStatus)
@@ -131,6 +147,14 @@ def read_analysis_run(run_id: str) -> RunResponse:
     if run is None:
         raise HTTPException(status_code=404, detail="The requested run does not exist.")
     return run
+
+
+@router.post("/runs/{run_id}/replay", response_model=ReplayVerification)
+def replay_analysis_run(run_id: str) -> ReplayVerification:
+    verification = replay_run(run_id)
+    if verification is None:
+        raise HTTPException(status_code=404, detail="The requested run does not exist.")
+    return verification
 
 
 @router.get("/runs/{run_id}/report.pdf")

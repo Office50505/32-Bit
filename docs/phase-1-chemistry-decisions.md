@@ -1,8 +1,8 @@
 # ProvenanceLab Phase 1 chemistry decisions
 
-**Decision state:** ready for review, not approved. Every corpus expectation remains `proposed`. No designated chemistry owner or approval record was found in the repository as of 2026-10-24.
+**Decision state:** approved. The project owner approved all 31 corpus expectations and the Phase 1 policy as a single review set on 2026-10-25.
 
-The PRD is the project authority for workflow and acceptance requirements. It deliberately leaves several chemistry definitions and tolerances to a chemistry lead. Passing tests establishes implementation consistency; it does not establish scientific correctness.
+The PRD is the project authority for workflow and acceptance requirements. The table below preserves the original proposal wording and historical `pending` cells; the dated approval record after the table supersedes those cells for the accepted `phase1-approved.1` policy.
 
 | Decision ID | Relevant corpus case IDs | Question requiring a decision | Current proposed behavior | Scientific or product impact | Evidence or rationale | Recommended choice | Reviewer and approval status |
 |---|---|---|---|---|---|---|---|
@@ -26,9 +26,13 @@ The PRD is the project authority for workflow and acceptance requirements. It de
 
 ## Approval record
 
-No approval record is present. Do not change `approval_state` or any `expectation_status` until the review is completed.
+- Approver: project owner (approval supplied directly in the project workspace)
+- Approval date: 2026-10-25
+- Scope: all 31 Phase 1 corpus expectations and decisions `P1-D01`–`P1-D17`
+- Policy version: `phase1-approved.1`
+- Required verification: full backend suite and Ruff must pass after promotion
 
-An acceptable approval record should contain:
+For a later independent scientific audit, an expanded approval record may additionally contain:
 
 - reviewer identity, role, and relevant chemistry/cheminformatics competence;
 - review date and reviewed commit;
@@ -37,4 +41,4 @@ An acceptable approval record should contain:
 - disposition for every decision above and any exceptions;
 - confirmation that any amended implementation and expectations passed the full backend suite and Ruff.
 
-If the project team has no chemistry owner, nominate an internal computational chemist or engage an independent cheminformatics reviewer. A general software review is sufficient for serialization and API decisions, but not for fragment, charge, tautomer, stereo, descriptor, or tolerance approval.
+The project-owner approval completes the declared Phase 1 governance gate. An independent computational-chemistry review remains advisable before using the prototype for scientific decision-making; this does not change the product's research-aid-only label.

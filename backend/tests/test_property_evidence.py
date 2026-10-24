@@ -4,7 +4,10 @@ from pathlib import Path
 from app.models.analysis import AnalyzeRequest, ResultStatus
 from app.services import chemistry
 from app.services.evidence import evidence_for, resolve_property_evidence
-from app.services.pubchem_questions import FrozenPubChemClient
+from app.services.pubchem_questions import (
+    FrozenPubChemClient,
+    PubChemCompoundNotFoundError,
+)
 
 
 def _aspirin_payload() -> bytes:
@@ -87,3 +90,20 @@ def test_analysis_manifest_identifies_the_frozen_pubchem_record(
     assert "CID 2244" in result.manifest.snapshot_scope
     assert weight.evidence.value == 180.16
     assert weight.comparison_status == ResultStatus.AVAILABLE
+
+
+def test_missing_pubchem_cid_is_not_reported_as_an_api_failure(tmp_path: Path) -> None:
+    def no_match(_url: str, _timeout: float) -> bytes:
+        raise PubChemCompoundNotFoundError("No CID found")
+
+    resolution = resolve_property_evidence(
+        "CC(C)(C)c1ccc(C(=O)N[C@@H](Cc2ccccc2)C(=O)OCCN2CCOCC2)cc1",
+        client=FrozenPubChemClient(tmp_path, transport=no_match),
+        enabled=True,
+    )
+    observation = evidence_for(resolution, "molecular_weight", "g/mol")
+
+    assert resolution.snapshot_id == "pubchem-no-reference-match"
+    assert resolution.reason_code == "PUBCHEM_NO_CID_FOR_INCHIKEY"
+    assert observation.status == ResultStatus.NO_REFERENCE_MATCH
+    assert "No PubChem CID matches" in (observation.reason or "")

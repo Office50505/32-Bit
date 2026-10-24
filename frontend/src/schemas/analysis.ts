@@ -1,6 +1,13 @@
 export type Severity = "error" | "warning" | "info";
 export type MoleculeStatus = "valid" | "ambiguous" | "invalid";
 
+export type MoleculeRelationship =
+  | "EXACT_SAME_STRUCTURE"
+  | "SAME_STANDARDIZED_PARENT"
+  | "STEREOISOMERS"
+  | "DIFFERENT_STRUCTURE"
+  | "INDETERMINATE";
+
 export type ResultStatus =
   | "AVAILABLE"
   | "INVALID_INPUT"
@@ -90,6 +97,22 @@ export interface PropertyComparison {
   comparison_status: ResultStatus;
 }
 
+export interface BioactivityEvidence {
+  source: "ChEMBL";
+  status: ResultStatus;
+  molecule_chembl_id?: string | null;
+  preferred_name?: string | null;
+  release?: string | null;
+  activity_count?: number | null;
+  snapshot_id: string;
+  snapshot_scope: string;
+  retrieved_at?: string | null;
+  source_url?: string | null;
+  response_sha256?: string | null;
+  reason_code: string;
+  reason: string;
+}
+
 export interface RunManifest {
   analysis_id: string;
   input_sha256: string;
@@ -117,12 +140,33 @@ export interface AnalyzeResponse {
   issues: ValidationIssue[];
   standardization_steps: StandardizationStep[];
   properties: PropertyComparison[];
+  bioactivity_evidence: BioactivityEvidence;
   source?: SourceMetadata | null;
   manifest: RunManifest;
 }
 
+export interface MoleculeIdentityComparison {
+  left_index: number;
+  right_index: number;
+  relationship: MoleculeRelationship;
+  reason_code: string;
+  reason: string;
+  left_standardized_smiles?: string | null;
+  right_standardized_smiles?: string | null;
+}
+
 export interface BatchAnalyzeResponse {
   results: AnalyzeResponse[];
+  identity_comparisons: MoleculeIdentityComparison[];
+}
+
+export interface ReplayEnvironment {
+  python: string;
+  rdkit: string;
+  platform: string;
+  machine: string;
+  dependency_lock_sha256: string;
+  environment_sha256: string;
 }
 
 export interface RunResponse extends BatchAnalyzeResponse {
@@ -130,6 +174,18 @@ export interface RunResponse extends BatchAnalyzeResponse {
   input_sha256: string;
   configuration_sha256: string;
   output_sha256: string;
+  environment?: ReplayEnvironment | null;
+}
+
+export interface ReplayVerification {
+  run_id: string;
+  status: "MATCH" | "ENVIRONMENT_MISMATCH" | "OUTPUT_MISMATCH" | "LEGACY_RUN_NO_ENVIRONMENT";
+  reproducible: boolean;
+  expected_output_sha256: string;
+  actual_output_sha256: string;
+  expected_environment_sha256?: string | null;
+  actual_environment_sha256: string;
+  differences: string[];
 }
 
 export interface ApiErrorResponse {
