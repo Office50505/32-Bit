@@ -19,7 +19,7 @@ function records(values: readonly (string | number | null)[], invalid = false): 
     value: values[index],
     unit: unit || undefined,
     reference: null,
-    status: invalid ? "NOT_COMPUTED" : "OUTSIDE_COVERAGE",
+    status: invalid ? "NOT_COMPUTED" : "OUTSIDE_SNAPSHOT_COVERAGE",
     reason: invalid ? "Invalid structure blocked every descriptor calculation." : unavailable,
   }));
 }
@@ -72,8 +72,8 @@ export const DEMO_MOLECULES: MoleculeCandidate[] = [
     status: "invalid", source: "Demo table 2 · row 14", confirmed: true,
     issue: {
       code: "IMPOSSIBLE_VALENCE", title: "Impossible valence", severity: "error", atomIndex: 6,
-      explanation: "Oxygen atom 7 has three single bonds without a compatible formal charge. No properties were calculated.",
-      whyItMatters: "The notation cannot be accepted as a chemically valid molecular graph, so a property value would be misleading.",
+      explanation: "Oxygen atom 7 has three bonds without a compatible formal charge. No property values were calculated for this structure.",
+      whyItMatters: "In this example, three single bonds on neutral oxygen violate its expected valence. Calculating properties from this graph would be unreliable.",
       nextStep: "Review atom 7, its formal charge, and the three surrounding bonds against the source.",
     },
     steps: [], descriptors: records([null, null, null, null, null, null, null, null], true),

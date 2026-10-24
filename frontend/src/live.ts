@@ -2,10 +2,10 @@ import type { AnalyzeResponse, PropertyComparison } from "./schemas/analysis";
 import type { DescriptorRecord, MoleculeCandidate } from "./domain";
 
 function mapProperty(property: PropertyComparison): DescriptorRecord {
-  const status = property.computed.status === "INVALID_INPUT" || property.computed.status === "COMPUTATION_ERROR" ? "NOT_COMPUTED"
+  const status = property.computed.status === "INVALID_INPUT" || property.computed.status === "COMPUTATION_ERROR" || property.comparison_status === "NOT_COMPUTABLE" ? "NOT_COMPUTED"
     : property.comparison_status === "AVAILABLE" ? "MATCH"
     : property.comparison_status === "CONFLICTING_EVIDENCE" ? "DIFFERENCE"
-    : property.comparison_status === "OUTSIDE_SNAPSHOT_COVERAGE" ? "OUTSIDE_COVERAGE"
+    : property.comparison_status === "OUTSIDE_SNAPSHOT_COVERAGE" ? "OUTSIDE_SNAPSHOT_COVERAGE"
     : property.comparison_status === "NOT_APPLICABLE" ? "NOT_APPLICABLE" : "NOT_AVAILABLE";
   return {
     key: property.key, label: property.label, value: property.computed.value,
@@ -28,6 +28,7 @@ export function fromApi(result: AnalyzeResponse): MoleculeCandidate {
     steps: result.standardization_steps.map((step) => ({ code: step.code, label: step.label,
       before: step.before_smiles, after: step.after_smiles, changed: step.changed })),
     descriptors: result.properties.map(mapProperty), confirmed: true, depictionSvg: result.depiction_svg,
+    sourceFileSha256: result.source?.file_sha256,
     manifest: { analysisId: result.analysis_id, inputSha256: result.manifest.input_sha256,
       outputSha256: result.manifest.output_sha256, configurationSha256: result.manifest.configuration_sha256,
       rdkitVersion: result.manifest.tool_versions.rdkit, snapshotId: result.manifest.snapshot_id, mode: "live" },

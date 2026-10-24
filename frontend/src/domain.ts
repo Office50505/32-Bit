@@ -1,8 +1,8 @@
 export type MoleculeStatus = "valid" | "ambiguous" | "invalid";
-export type EvidenceStatus = "MATCH" | "DIFFERENCE" | "NOT_AVAILABLE" | "OUTSIDE_COVERAGE" | "NOT_APPLICABLE" | "NOT_COMPUTED";
+export type EvidenceStatus = "MATCH" | "DIFFERENCE" | "NOT_AVAILABLE" | "OUTSIDE_SNAPSHOT_COVERAGE" | "NOT_APPLICABLE" | "NOT_COMPUTED";
 export type StepId = "source" | "confirm" | "validate" | "compare" | "report";
 export type AuditTab = "validation" | "standardization" | "properties" | "evidence" | "provenance";
-export type ViewerStyle = "ball-stick" | "stick" | "space-filling";
+export type ViewerStyle = "ball-stick" | "wireframe" | "space-filling";
 
 export interface ValidationIssue {
   code: string;
@@ -56,6 +56,7 @@ export interface MoleculeCandidate {
   manifest: ProvenanceManifest;
   confirmed: boolean;
   depictionSvg?: string | null;
+  sourceFileSha256?: string | null;
 }
 
 export interface Atom3D {

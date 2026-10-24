@@ -38,6 +38,8 @@ ProvenanceLab makes those uncertainties visible. It keeps the submitted input se
 
 ProvenanceLab is a working **SMILES-analysis prototype**, not a finished production service. The frontend opens with three clearly labeled demonstration records. Their structures, descriptors, and small bootstrap reference set are illustrative; demo manifests deliberately contain no invented RDKit version or hashes. Student-entered SMILES are sent to the FastAPI/RDKit service only after confirmation.
 
+The validation workspace opens on the invalid demo record to show the atom-level 3D error marker. Demo coordinates are illustrative, not optimized conformers. Live analyses use the RDKit 2D depiction because the service does not currently return a verified 3D conformer. The run-record dialog previews the exact JSON that its download action exports.
+
 | Capability | Status | Current behavior |
 | --- | :---: | --- |
 | Direct SMILES input | ✅ Working | Accepts student-entered SMILES and preserves the submitted text |
