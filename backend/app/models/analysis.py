@@ -1,7 +1,7 @@
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Severity(StrEnum):
@@ -54,6 +54,15 @@ class StandardizationStep(BaseModel):
     before_smiles: str
     after_smiles: str
     changed: bool
+    status: Literal["applied", "failed"] = "applied"
+    reason_code: str | None = None
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_failure_reason(self) -> Self:
+        if self.status == "failed" and (not self.reason_code or not self.reason):
+            raise ValueError("failed standardization steps require a reason code and explanation")
+        return self
 
 
 class PropertyObservation(BaseModel):
@@ -62,6 +71,14 @@ class PropertyObservation(BaseModel):
     status: ResultStatus
     reason_code: str | None = None
     reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_value_semantics(self) -> Self:
+        if self.value is None and self.status == ResultStatus.AVAILABLE:
+            raise ValueError("AVAILABLE observations require a value")
+        if self.value is None and (not self.reason_code or not self.reason):
+            raise ValueError("missing observations require a reason code and explanation")
+        return self
 
 
 class PropertyComparison(BaseModel):
@@ -88,6 +105,13 @@ class AnalyzeRequest(BaseModel):
     input_type: Literal["smiles"] = "smiles"
     label: str | None = Field(default=None, max_length=200)
     source: SourceMetadata | None = None
+
+    @field_validator("structure")
+    @classmethod
+    def reject_whitespace_only_structure(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("structure must contain non-whitespace SMILES text")
+        return value
 
 
 class ToolVersions(BaseModel):

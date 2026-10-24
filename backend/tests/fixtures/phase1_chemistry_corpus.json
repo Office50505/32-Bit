@@ -1,0 +1,255 @@
+{
+  "schema_version": "phase1-corpus-v1",
+  "chemistry_policy": "phase1-proposed.1",
+  "approval_state": "proposed",
+  "cases": [
+    {
+      "case_id": "SYNTAX-001",
+      "category": "syntax_ring_closure",
+      "input": {"format": "smiles", "structure": "C1CC"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The ring label is opened but never closed.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "SYNTAX-002",
+      "category": "syntax_ring_closure",
+      "input": {"format": "smiles", "structure": "C(C"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The branch parenthesis is not closed.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "SYNTAX-003",
+      "category": "syntax_ring_closure",
+      "input": {"format": "smiles", "structure": "C]"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The bracket is unmatched and cannot form an atom expression.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "SYNTAX-004",
+      "category": "syntax_ring_closure",
+      "input": {"format": "smiles", "structure": "=CC"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "A bond token cannot precede the first atom.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "SYNTAX-005",
+      "category": "syntax_ring_closure",
+      "input": {"format": "smiles", "structure": "Q"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "Q is not a valid unbracketed SMILES atom symbol.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "SYNTAX-006",
+      "category": "syntax_ring_closure",
+      "input": {"format": "smiles", "structure": "C-#C"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "Two incompatible bond tokens are placed between the same atoms.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "VAL-001",
+      "category": "valence_sanitization_aromaticity",
+      "input": {"format": "smiles", "structure": "C[O](C)C"},
+      "expected": {"classification": "invalid", "issues": [{"code": "IMPOSSIBLE_VALENCE", "severity": "error", "location": {"atom_indices": [1], "bond_indices": []}}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "Neutral oxygen has three single bonds without a compatible charge.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "VAL-002",
+      "category": "valence_sanitization_aromaticity",
+      "input": {"format": "smiles", "structure": "N(C)(C)(C)(C)C"},
+      "expected": {"classification": "invalid", "issues": [{"code": "IMPOSSIBLE_VALENCE", "severity": "error", "location": {"atom_indices": [0], "bond_indices": []}}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "Neutral nitrogen is assigned five single bonds.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "VAL-003",
+      "category": "valence_sanitization_aromaticity",
+      "input": {"format": "smiles", "structure": "[CH5]"},
+      "expected": {"classification": "invalid", "issues": [{"code": "IMPOSSIBLE_VALENCE", "severity": "error", "location": {"atom_indices": [0], "bond_indices": []}}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The bracketed carbon is assigned five hydrogens.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "VAL-004",
+      "category": "valence_sanitization_aromaticity",
+      "input": {"format": "smiles", "structure": "c1cccc1"},
+      "expected": {"classification": "invalid", "issues": [{"code": "AROMATICITY_ERROR", "severity": "error", "location": {"atom_indices": [0, 1, 2, 3, 4], "bond_indices": []}}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The five-carbon aromatic notation cannot be kekulized by RDKit.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "VAL-005",
+      "category": "valence_sanitization_aromaticity",
+      "input": {"format": "smiles", "structure": "c1nccc1"},
+      "expected": {"classification": "invalid", "issues": [{"code": "AROMATICITY_ERROR", "severity": "error", "location": {"atom_indices": [0, 1, 2, 3, 4], "bond_indices": []}}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The five-member aromatic pattern cannot be assigned a valid Kekule form.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "VAL-006",
+      "category": "valence_sanitization_aromaticity",
+      "input": {"format": "smiles", "structure": "c1cc1"},
+      "expected": {"classification": "invalid", "issues": [{"code": "AROMATICITY_ERROR", "severity": "error", "location": {"atom_indices": [0, 1, 2], "bond_indices": []}}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "The three aromatic carbons cannot be kekulized as written.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "STEREO-001",
+      "category": "stereochemistry_geometry",
+      "input": {"format": "smiles", "structure": "CCC(O)C"},
+      "expected": {"classification": "ambiguous", "issues": [{"code": "UNSPECIFIED_STEREOCHEMISTRY", "severity": "warning", "location": {"atom_indices": [2], "bond_indices": []}}], "canonical_smiles": "CCC(C)O", "standardization": {"outcome": "applied", "standardized_smiles": "CCC(C)O", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "2-butanol has a potential tetrahedral center with no assignment.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "STEREO-002",
+      "category": "stereochemistry_geometry",
+      "input": {"format": "smiles", "structure": "CC(F)Cl"},
+      "expected": {"classification": "ambiguous", "issues": [{"code": "UNSPECIFIED_STEREOCHEMISTRY", "severity": "warning", "location": {"atom_indices": [1], "bond_indices": []}}], "canonical_smiles": "CC(F)Cl", "standardization": {"outcome": "applied", "standardized_smiles": "CC(F)Cl", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The carbon attached to methyl, hydrogen, fluorine, and chlorine is unassigned.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "STEREO-003",
+      "category": "stereochemistry_geometry",
+      "input": {"format": "smiles", "structure": "FC=CF"},
+      "expected": {"classification": "ambiguous", "issues": [{"code": "UNSPECIFIED_STEREOCHEMISTRY", "severity": "warning", "location": {"atom_indices": [], "bond_indices": [1]}}], "canonical_smiles": "FC=CF", "standardization": {"outcome": "applied", "standardized_smiles": "FC=CF", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The stereogenic double bond has no E/Z assignment.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "STEREO-004",
+      "category": "stereochemistry_geometry",
+      "input": {"format": "smiles", "structure": "C/C=C/C"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "C/C=C/C", "standardization": {"outcome": "applied", "standardized_smiles": "C/C=C/C", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The double-bond geometry is explicitly specified.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "STEREO-005",
+      "category": "stereochemistry_geometry",
+      "input": {"format": "smiles", "structure": "F[C@](F)(Cl)Br"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "FC(F)(Cl)Br", "standardization": {"outcome": "applied", "standardized_smiles": "FC(F)(Cl)Br", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "Two identical fluorine substituents make the marked center non-stereogenic.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "FRAG-001",
+      "category": "salts_solvents_fragments",
+      "input": {"format": "smiles", "structure": "CC(=O)[O-].[Na+]"},
+      "expected": {"classification": "valid", "issues": [{"code": "MULTIPLE_FRAGMENTS", "severity": "info"}], "canonical_smiles": "CC(=O)[O-].[Na+]", "standardization": {"outcome": "applied", "standardized_smiles": "CC(=O)O", "changed_steps": ["FRAGMENT_PARENT", "UNCHARGE"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "Sodium acetate retains its source form while selecting and neutralizing the organic parent.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "FRAG-002",
+      "category": "salts_solvents_fragments",
+      "input": {"format": "smiles", "structure": "CCO.O"},
+      "expected": {"classification": "valid", "issues": [{"code": "MULTIPLE_FRAGMENTS", "severity": "info"}], "canonical_smiles": "CCO.O", "standardization": {"outcome": "applied", "standardized_smiles": "CCO", "changed_steps": ["FRAGMENT_PARENT"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "Water is removed when RDKit selects ethanol as the parent.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "FRAG-003",
+      "category": "salts_solvents_fragments",
+      "input": {"format": "smiles", "structure": "CC[NH3+].[Cl-]"},
+      "expected": {"classification": "valid", "issues": [{"code": "MULTIPLE_FRAGMENTS", "severity": "info"}], "canonical_smiles": "CC[NH3+].[Cl-]", "standardization": {"outcome": "applied", "standardized_smiles": "CCN", "changed_steps": ["FRAGMENT_PARENT", "UNCHARGE"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "Ethylammonium chloride becomes the neutral ethylamine comparison parent.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "FRAG-004",
+      "category": "salts_solvents_fragments",
+      "input": {"format": "smiles", "structure": "CCO.CCO"},
+      "expected": {"classification": "valid", "issues": [{"code": "MULTIPLE_FRAGMENTS", "severity": "info"}], "canonical_smiles": "CCO.CCO", "standardization": {"outcome": "applied", "standardized_smiles": "CCO", "changed_steps": ["FRAGMENT_PARENT"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "Duplicate equal fragments deterministically collapse to one parent under the proposed policy.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "CHARGE-001",
+      "category": "charge_protonation",
+      "input": {"format": "smiles", "structure": "[NH4+]"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "[NH4+]", "standardization": {"outcome": "applied", "standardized_smiles": "N", "changed_steps": ["UNCHARGE"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "RDKit's uncharger maps ammonium to the neutral comparison form.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "CHARGE-002",
+      "category": "charge_protonation",
+      "input": {"format": "smiles", "structure": "[O-]C(=O)C"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "CC(=O)[O-]", "standardization": {"outcome": "applied", "standardized_smiles": "CC(=O)O", "changed_steps": ["UNCHARGE"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The acetate anion is neutralized to the acetic-acid comparison form.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "CHARGE-003",
+      "category": "charge_protonation",
+      "input": {"format": "smiles", "structure": "[NH3+]CC([O-])=O"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "[NH3+]CC(=O)[O-]", "standardization": {"outcome": "applied", "standardized_smiles": "NCC(=O)O", "changed_steps": ["UNCHARGE"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The glycine zwitterion is neutralized without claiming physiological dominance.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "TAUT-001",
+      "category": "tautomer_equivalent_form",
+      "input": {"format": "smiles", "structure": "CC(=O)C"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "CC(C)=O", "standardization": {"outcome": "applied", "standardized_smiles": "CC(C)=O", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The keto form of acetone is already RDKit's canonical tautomer.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "TAUT-002",
+      "category": "tautomer_equivalent_form",
+      "input": {"format": "smiles", "structure": "C=C(O)C"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "C=C(C)O", "standardization": {"outcome": "applied", "standardized_smiles": "CC(C)=O", "changed_steps": ["CANONICAL_TAUTOMER"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "The enol form canonicalizes to RDKit's acetone keto tautomer.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "TAUT-003",
+      "category": "tautomer_equivalent_form",
+      "input": {"format": "smiles", "structure": "Oc1ncccc1"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "Oc1ccccn1", "standardization": {"outcome": "applied", "standardized_smiles": "O=c1cccc[nH]1", "changed_steps": ["CANONICAL_TAUTOMER"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "2-hydroxypyridine canonicalizes to RDKit's pyridone tautomer.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "EVID-001",
+      "category": "evidence_missing_semantics",
+      "input": {"format": "smiles", "structure": "CCO"},
+      "expected": {"classification": "valid", "issues": [], "canonical_smiles": "CCO", "standardization": {"outcome": "applied", "standardized_smiles": "CCO", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "A valid molecule has computed values but no reference values without a snapshot.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "EVID-002",
+      "category": "evidence_missing_semantics",
+      "input": {"format": "smiles", "structure": "C1CCC"},
+      "expected": {"classification": "invalid", "issues": [{"code": "SMILES_SYNTAX_ERROR", "severity": "error"}], "canonical_smiles": null, "standardization": {"outcome": "not_run"}, "descriptors": {"status": "INVALID_INPUT", "values": "absent"}, "evidence": {"status": "NOT_APPLICABLE", "reason_code": "NO_VALID_STRUCTURE_FOR_LOOKUP"}},
+      "reason": "Evidence lookup is not applicable when no valid graph exists.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "EVID-003",
+      "category": "evidence_missing_semantics",
+      "input": {"format": "smiles", "structure": "CC(O)F"},
+      "expected": {"classification": "ambiguous", "issues": [{"code": "UNSPECIFIED_STEREOCHEMISTRY", "severity": "warning", "location": {"atom_indices": [1], "bond_indices": []}}], "canonical_smiles": "CC(O)F", "standardization": {"outcome": "applied", "standardized_smiles": "CC(O)F", "changed_steps": []}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "Ambiguity does not fabricate or suppress the explicit no-snapshot state.",
+      "expectation_status": "proposed"
+    },
+    {
+      "case_id": "EVID-004",
+      "category": "evidence_missing_semantics",
+      "input": {"format": "smiles", "structure": "CC(=O)[O-].[K+]"},
+      "expected": {"classification": "valid", "issues": [{"code": "MULTIPLE_FRAGMENTS", "severity": "info"}], "canonical_smiles": "CC(=O)[O-].[K+]", "standardization": {"outcome": "applied", "standardized_smiles": "CC(=O)O", "changed_steps": ["FRAGMENT_PARENT", "UNCHARGE"]}, "descriptors": {"status": "AVAILABLE", "values": "present"}, "evidence": {"status": "NOT_AVAILABLE", "reason_code": "REFERENCE_SNAPSHOT_NOT_CONFIGURED"}},
+      "reason": "A standardized salt parent still reports unavailable evidence rather than a database miss.",
+      "expectation_status": "proposed"
+    }
+  ]
+}

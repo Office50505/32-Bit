@@ -6,6 +6,10 @@ from rdkit.Chem import Crippen, Descriptors, Lipinski, rdDepictor, rdMolDescript
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
+from app.core.chemistry_config import (
+    DESCRIPTOR_CONFIGURATION,
+    STANDARDIZATION_CONFIGURATION,
+)
 from app.core.provenance import create_manifest
 from app.models.analysis import (
     AnalyzeRequest,
@@ -26,144 +30,200 @@ from app.services.evidence import evidence_for
 class PropertySpec:
     key: str
     label: str
+    method: str
     unit: str | None
+    precision: int | None
     calculator: Callable[[Chem.Mol], str | float | int]
     tolerance: float | None = None
 
 
-PROPERTY_SPECS = (
-    PropertySpec("molecular_formula", "Molecular formula", None, rdMolDescriptors.CalcMolFormula),
+DESCRIPTOR_CALCULATORS: dict[str, Callable[[Chem.Mol], str | float | int]] = {
+    "molecular_formula": rdMolDescriptors.CalcMolFormula,
+    "molecular_weight": Descriptors.MolWt,
+    "exact_mass": Descriptors.ExactMolWt,
+    "logp": Crippen.MolLogP,
+    "tpsa": rdMolDescriptors.CalcTPSA,
+    "hbd": Lipinski.NumHDonors,
+    "hba": Lipinski.NumHAcceptors,
+    "rotatable_bonds": Lipinski.NumRotatableBonds,
+    "ring_count": Lipinski.RingCount,
+    "fraction_csp3": rdMolDescriptors.CalcFractionCSP3,
+}
+
+PROPERTY_SPECS = tuple(
     PropertySpec(
-        "molecular_weight",
-        "Molecular weight",
-        "g/mol",
-        lambda m: round(Descriptors.MolWt(m), 2),
-        0.02,
-    ),
-    PropertySpec(
-        "exact_mass", "Exact mass", "Da", lambda m: round(Descriptors.ExactMolWt(m), 4), 0.001
-    ),
-    PropertySpec("logp", "LogP", None, lambda m: round(Crippen.MolLogP(m), 2), 0.15),
-    PropertySpec(
-        "tpsa",
-        "Topological polar surface area",
-        "Å²",
-        lambda m: round(rdMolDescriptors.CalcTPSA(m), 2),
-        0.1,
-    ),
-    PropertySpec("hbd", "Hydrogen-bond donors", None, Lipinski.NumHDonors),
-    PropertySpec("hba", "Hydrogen-bond acceptors", None, Lipinski.NumHAcceptors),
-    PropertySpec("rotatable_bonds", "Rotatable bonds", None, Lipinski.NumRotatableBonds),
-    PropertySpec("ring_count", "Ring count", None, Lipinski.RingCount),
-    PropertySpec(
-        "fraction_csp3",
-        "Fraction Csp³",
-        None,
-        lambda m: round(rdMolDescriptors.CalcFractionCSP3(m), 2),
-        0.01,
-    ),
+        key=definition["key"],
+        label=definition["label"],
+        method=definition["method"],
+        unit=definition["unit"],
+        precision=definition["precision"],
+        calculator=DESCRIPTOR_CALCULATORS[definition["key"]],
+        tolerance=definition["tolerance"],
+    )
+    for definition in DESCRIPTOR_CONFIGURATION
 )
 
 
-def _invalid_issue(
-    code: str, title: str, detail: str, atom_index: int | None = None
-) -> ValidationIssue:
-    location = IssueLocation(atom_indices=[atom_index] if atom_index is not None else [])
-    if code == "IMPOSSIBLE_VALENCE":
-        return ValidationIssue(
-            code=code,
-            title=title,
-            severity=Severity.ERROR,
-            summary="An atom has more bonds than its valence and charge permit.",
-            explanation=(
-                f"Atom {atom_index + 1 if atom_index is not None else 'at the reported position'} "
-                "has an incompatible combination of bonds and formal charge."
-            ),
-            why_it_matters=(
-                "The structure is not chemically valid and cannot be used for safe "
-                "property calculations."
-            ),
-            next_step=(
-                "Review the highlighted atom, formal charge, and surrounding bond "
-                "orders in the source."
-            ),
-            location=location,
-            technical_detail=detail,
-        )
-    return ValidationIssue(
-        code=code,
-        title=title,
-        severity=Severity.ERROR,
-        summary="The molecular notation could not be interpreted safely.",
-        explanation="The submitted SMILES could not be converted into a valid molecular graph.",
-        why_it_matters=(
+ISSUE_CONTENT = {
+    "SMILES_SYNTAX_ERROR": {
+        "title": "SMILES syntax error",
+        "summary": "The molecular notation could not be parsed into a graph.",
+        "explanation": "RDKit could not convert the submitted SMILES into a molecular graph.",
+        "why_it_matters": (
             "Without a molecular graph, the application cannot calculate or compare properties."
         ),
-        next_step=(
+        "next_step": (
             "Check brackets, branches, ring labels, atom symbols, charges, and bond characters."
         ),
-        location=location,
+    },
+    "IMPOSSIBLE_VALENCE": {
+        "title": "Impossible valence",
+        "summary": "An atom has more bonds than its valence and charge permit.",
+        "explanation": (
+            "The graph contains an atom with an incompatible combination of bonds "
+            "and formal charge."
+        ),
+        "why_it_matters": (
+            "The structure is not chemically valid and cannot be used for safe "
+            "property calculations."
+        ),
+        "next_step": (
+            "Review the highlighted atom, formal charge, and surrounding bond orders "
+            "in the source."
+        ),
+    },
+    "AROMATICITY_ERROR": {
+        "title": "Aromaticity could not be resolved",
+        "summary": "The aromatic bond pattern cannot be converted to a consistent graph.",
+        "explanation": "RDKit could not assign a valid Kekule representation to the graph.",
+        "why_it_matters": (
+            "Unresolved aromaticity prevents a safely sanitized molecular representation."
+        ),
+        "next_step": "Review aromatic atom notation, ring closure, and alternating bond patterns.",
+    },
+    "SANITIZATION_ERROR": {
+        "title": "Chemical sanitization failed",
+        "summary": "The parsed graph failed a chemical consistency check.",
+        "explanation": "RDKit could not safely sanitize the parsed molecular graph.",
+        "why_it_matters": (
+            "A graph that fails sanitization cannot be used for reliable property calculations."
+        ),
+        "next_step": "Review the submitted charges, bonds, aromaticity, and atom specification.",
+    },
+}
+
+
+def _invalid_issue(
+    code: str,
+    detail: str,
+    atom_indices: list[int] | None = None,
+) -> ValidationIssue:
+    content = ISSUE_CONTENT[code]
+    return ValidationIssue(
+        code=code,
+        title=content["title"],
+        severity=Severity.ERROR,
+        summary=content["summary"],
+        explanation=content["explanation"],
+        why_it_matters=content["why_it_matters"],
+        next_step=content["next_step"],
+        location=IssueLocation(atom_indices=atom_indices or []),
         technical_detail=detail,
+    )
+
+
+def _problem_atom_indices(problem: object) -> list[int]:
+    if hasattr(problem, "GetAtomIdx"):
+        return [int(problem.GetAtomIdx())]
+    if hasattr(problem, "GetAtomIndices"):
+        return [int(index) for index in problem.GetAtomIndices()]
+    return []
+
+
+def _sanitization_issue(
+    problems: list[object],
+    failure: Chem.SanitizeFlags,
+) -> ValidationIssue:
+    prioritized_types = ("AtomValenceException", "KekulizeException")
+    problem = next(
+        (
+            candidate
+            for problem_type in prioritized_types
+            for candidate in problems
+            if candidate.GetType() == problem_type
+        ),
+        problems[0] if problems else None,
+    )
+    problem_type = problem.GetType() if problem is not None else None
+    if problem_type == "AtomValenceException" or failure == Chem.SanitizeFlags.SANITIZE_PROPERTIES:
+        code = "IMPOSSIBLE_VALENCE"
+    elif problem_type == "KekulizeException" or failure == Chem.SanitizeFlags.SANITIZE_KEKULIZE:
+        code = "AROMATICITY_ERROR"
+    else:
+        code = "SANITIZATION_ERROR"
+    detail = (
+        problem.Message()
+        if problem is not None
+        else f"RDKit sanitization flag: {int(failure)}"
+    )
+    return _invalid_issue(
+        code,
+        detail,
+        _problem_atom_indices(problem) if problem is not None else [],
     )
 
 
 def _parse_and_validate(
     smiles: str,
 ) -> tuple[Chem.Mol | None, list[ValidationIssue], Chem.Mol | None]:
-    raw_mol = Chem.MolFromSmiles(smiles, sanitize=False)
+    try:
+        raw_mol = Chem.MolFromSmiles(smiles, sanitize=False)
+    except Exception:
+        raw_mol = None
     if raw_mol is None:
         return (
             None,
-            [
-                _invalid_issue(
-                    "SMILES_SYNTAX_ERROR",
-                    "SMILES syntax error",
-                    "RDKit returned no molecular graph.",
-                )
-            ],
+            [_invalid_issue("SMILES_SYNTAX_ERROR", "RDKit returned no molecular graph.")],
             None,
         )
 
     try:
-        Chem.SanitizeMol(raw_mol)
-    except Exception as exc:  # RDKit exposes several native exception subclasses.
-        detail = str(exc)
-        atom_index = exc.GetAtomIdx() if hasattr(exc, "GetAtomIdx") else None
-        if "valence" in detail.lower():
-            issue = _invalid_issue("IMPOSSIBLE_VALENCE", "Impossible valence", detail, atom_index)
-        elif "kekul" in detail.lower():
-            issue = _invalid_issue(
-                "AROMATICITY_ERROR", "Aromaticity could not be resolved", detail, atom_index
-            )
-        else:
-            issue = _invalid_issue(
-                "SANITIZATION_ERROR", "Chemical sanitization failed", detail, atom_index
-            )
+        problems = list(Chem.DetectChemistryProblems(raw_mol))
+        sanitization_failure = Chem.SanitizeMol(raw_mol, catchErrors=True)
+    except Exception as exc:
+        issue = _invalid_issue(
+            "SANITIZATION_ERROR",
+            f"RDKit sanitization raised {type(exc).__name__}.",
+        )
         return None, [issue], raw_mol
+    if sanitization_failure != Chem.SanitizeFlags.SANITIZE_NONE:
+        return None, [_sanitization_issue(problems, sanitization_failure)], raw_mol
 
     issues: list[ValidationIssue] = []
     Chem.AssignStereochemistry(raw_mol, force=True, cleanIt=True)
-    unassigned_centers = [
-        atom_index
-        for atom_index, label in Chem.FindMolChiralCenters(
-            raw_mol,
-            includeUnassigned=True,
-            includeCIP=True,
-            useLegacyImplementation=False,
-        )
-        if label == "?"
-    ]
-    if unassigned_centers:
-        human_atoms = ", ".join(str(index + 1) for index in unassigned_centers)
+    unassigned_atoms: list[int] = []
+    unassigned_bonds: list[int] = []
+    for stereo in Chem.FindPotentialStereo(raw_mol, cleanIt=False, flagPossible=True):
+        if stereo.specified != Chem.StereoSpecified.Unspecified:
+            continue
+        if stereo.type == Chem.StereoType.Atom_Tetrahedral:
+            unassigned_atoms.append(int(stereo.centeredOn))
+        elif stereo.type == Chem.StereoType.Bond_Double:
+            unassigned_bonds.append(int(stereo.centeredOn))
+    if unassigned_atoms or unassigned_bonds:
+        affected = []
+        if unassigned_atoms:
+            affected.append("atom(s) " + ", ".join(str(index + 1) for index in unassigned_atoms))
+        if unassigned_bonds:
+            affected.append("bond(s) " + ", ".join(str(index + 1) for index in unassigned_bonds))
         issues.append(
             ValidationIssue(
                 code="UNSPECIFIED_STEREOCHEMISTRY",
                 title="Ambiguous stereochemistry",
                 severity=Severity.WARNING,
-                summary="One or more stereogenic atoms do not specify their spatial arrangement.",
+                summary="One or more stereogenic features do not specify their arrangement.",
                 explanation=(
-                    f"Potential stereocentre(s) at atom(s) {human_atoms} are not assigned "
-                    "R/S configuration."
+                    f"Potential stereochemistry at {' and '.join(affected)} is not assigned."
                 ),
                 why_it_matters=(
                     "Different stereoisomers can have different biological activity and properties."
@@ -172,7 +232,10 @@ def _parse_and_validate(
                     "Check the paper or source diagram for wedge bonds or an explicit "
                     "stereochemical identifier."
                 ),
-                location=IssueLocation(atom_indices=unassigned_centers),
+                location=IssueLocation(
+                    atom_indices=unassigned_atoms,
+                    bond_indices=unassigned_bonds,
+                ),
             )
         )
 
@@ -198,11 +261,41 @@ def _parse_and_validate(
     return raw_mol, issues, raw_mol
 
 
-def _standardize(mol: Chem.Mol) -> tuple[Chem.Mol, list[StandardizationStep]]:
-    steps: list[StandardizationStep] = []
+def _standardization_functions() -> dict[str, Callable[[Chem.Mol], Chem.Mol]]:
+    return {
+        "CLEANUP": rdMolStandardize.Cleanup,
+        "FRAGMENT_PARENT": rdMolStandardize.FragmentParent,
+        "UNCHARGE": lambda molecule: rdMolStandardize.Uncharger().uncharge(molecule),
+        "CANONICAL_TAUTOMER": (
+            lambda molecule: rdMolStandardize.TautomerEnumerator().Canonicalize(molecule)
+        ),
+    }
 
-    def apply_step(code: str, label: str, before: Chem.Mol, after: Chem.Mol) -> Chem.Mol:
-        before_smiles = Chem.MolToSmiles(before, isomericSmiles=True)
+
+def _standardize(mol: Chem.Mol) -> tuple[Chem.Mol | None, list[StandardizationStep]]:
+    steps: list[StandardizationStep] = []
+    functions = _standardization_functions()
+    current = Chem.Mol(mol)
+    for definition in STANDARDIZATION_CONFIGURATION:
+        code = definition["code"]
+        label = definition["label"]
+        before_smiles = Chem.MolToSmiles(current, isomericSmiles=True)
+        try:
+            after = functions[code](current)
+        except Exception:
+            steps.append(
+                StandardizationStep(
+                    code=code,
+                    label=label,
+                    before_smiles=before_smiles,
+                    after_smiles=before_smiles,
+                    changed=False,
+                    status="failed",
+                    reason_code="RDKIT_STANDARDIZATION_FAILURE",
+                    reason=f"RDKit could not complete the {label.lower()} step.",
+                )
+            )
+            return None, steps
         after_smiles = Chem.MolToSmiles(after, isomericSmiles=True)
         steps.append(
             StandardizationStep(
@@ -213,38 +306,14 @@ def _standardize(mol: Chem.Mol) -> tuple[Chem.Mol, list[StandardizationStep]]:
                 changed=before_smiles != after_smiles,
             )
         )
-        return after
-
-    current = Chem.Mol(mol)
-    current = apply_step(
-        "CLEANUP",
-        "Normalize functional groups and charges",
-        current,
-        rdMolStandardize.Cleanup(current),
-    )
-    current = apply_step(
-        "FRAGMENT_PARENT",
-        "Select the parent fragment",
-        current,
-        rdMolStandardize.FragmentParent(current),
-    )
-    current = apply_step(
-        "UNCHARGE",
-        "Normalize removable formal charges",
-        current,
-        rdMolStandardize.Uncharger().uncharge(current),
-    )
-    current = apply_step(
-        "CANONICAL_TAUTOMER",
-        "Select the canonical tautomer",
-        current,
-        rdMolStandardize.TautomerEnumerator().Canonicalize(current),
-    )
+        current = after
     return current, steps
 
 
 def _depict(
-    mol: Chem.Mol | None, highlight_atoms: list[int], highlight_bonds: list[int]
+    mol: Chem.Mol | None,
+    highlight_atoms: list[int],
+    highlight_bonds: list[int],
 ) -> str | None:
     if mol is None:
         return None
@@ -272,8 +341,12 @@ def _depict(
 
 
 def _comparison_status(
-    computed: PropertyObservation, evidence: PropertyObservation, tolerance: float | None
+    computed: PropertyObservation,
+    evidence: PropertyObservation,
+    tolerance: float | None,
 ) -> ResultStatus:
+    if computed.status != ResultStatus.AVAILABLE:
+        return computed.status
     if evidence.status != ResultStatus.AVAILABLE:
         return evidence.status
     if computed.value is None or evidence.value is None:
@@ -296,8 +369,13 @@ def _properties(mol: Chem.Mol, canonical_smiles: str) -> list[PropertyComparison
     results: list[PropertyComparison] = []
     for spec in PROPERTY_SPECS:
         try:
+            value = spec.calculator(mol)
+            if spec.precision is not None and isinstance(value, float):
+                value = round(value, spec.precision)
             computed = PropertyObservation(
-                value=spec.calculator(mol), unit=spec.unit, status=ResultStatus.AVAILABLE
+                value=value,
+                unit=spec.unit,
+                status=ResultStatus.AVAILABLE,
             )
         except Exception as exc:
             computed = PropertyObservation(
@@ -305,7 +383,7 @@ def _properties(mol: Chem.Mol, canonical_smiles: str) -> list[PropertyComparison
                 unit=spec.unit,
                 status=ResultStatus.COMPUTATION_ERROR,
                 reason_code="RDKIT_DESCRIPTOR_FAILURE",
-                reason=f"RDKit could not calculate this descriptor: {exc}",
+                reason=f"RDKit could not calculate this descriptor ({type(exc).__name__}).",
             )
         evidence = evidence_for(canonical_smiles, spec.key, spec.unit)
         results.append(
@@ -346,6 +424,33 @@ def _invalid_properties() -> list[PropertyComparison]:
     ]
 
 
+def _standardization_failure_properties() -> list[PropertyComparison]:
+    return [
+        PropertyComparison(
+            key=spec.key,
+            label=spec.label,
+            computed=PropertyObservation(
+                value=None,
+                unit=spec.unit,
+                status=ResultStatus.COMPUTATION_ERROR,
+                reason_code="STANDARDIZATION_FAILED",
+                reason=(
+                    "Properties were not calculated because molecular standardization failed."
+                ),
+            ),
+            evidence=PropertyObservation(
+                value=None,
+                unit=spec.unit,
+                status=ResultStatus.NOT_APPLICABLE,
+                reason_code="NO_STANDARDIZED_STRUCTURE_FOR_LOOKUP",
+                reason="Evidence lookup requires a successfully standardized structure.",
+            ),
+            comparison_status=ResultStatus.COMPUTATION_ERROR,
+        )
+        for spec in PROPERTY_SPECS
+    ]
+
+
 def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
     molecule, issues, depiction_mol = _parse_and_validate(request.structure)
     highlight_atoms = [index for issue in issues for index in issue.location.atom_indices]
@@ -359,14 +464,18 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         properties = _invalid_properties()
     else:
         canonical_smiles = Chem.MolToSmiles(molecule, isomericSmiles=True)
-        standardized_mol, steps = _standardize(molecule)
-        standardized_smiles = Chem.MolToSmiles(standardized_mol, isomericSmiles=True)
-        properties = _properties(standardized_mol, standardized_smiles)
         status = (
             MoleculeStatus.AMBIGUOUS
             if any(issue.severity == Severity.WARNING for issue in issues)
             else MoleculeStatus.VALID
         )
+        standardized_mol, steps = _standardize(molecule)
+        if standardized_mol is None:
+            standardized_smiles = None
+            properties = _standardization_failure_properties()
+        else:
+            standardized_smiles = Chem.MolToSmiles(standardized_mol, isomericSmiles=True)
+            properties = _properties(standardized_mol, standardized_smiles)
 
     response_payload = {
         "label": request.label or "Untitled molecule",

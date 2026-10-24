@@ -5,16 +5,31 @@ from typing import Any
 
 from rdkit import rdBase
 
+from app.core.chemistry_config import (
+    CANONICAL_SERIALIZATION_VERSION,
+    CHEMISTRY_POLICY_VERSION,
+    DESCRIPTOR_CONFIGURATION,
+    OUTPUT_SCHEMA_VERSION,
+    STANDARDIZATION_CONFIGURATION,
+    VALIDATION_CONFIGURATION,
+    VALIDATION_POLICY_VERSION,
+)
 from app.models.analysis import RunManifest, ToolVersions
 
-PIPELINE_VERSION = "0.1.0"
-RULESET_VERSION = "hm-01.1"
+PIPELINE_VERSION = "0.2.0"
+RULESET_VERSION = "hm-01.2-proposed"
 SNAPSHOT_ID = "not-configured"
 SNAPSHOT_SCOPE = "No frozen PubChem or ChEMBL snapshot is configured in this build."
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
 
 
 def sha256_text(value: str) -> str:
@@ -30,14 +45,37 @@ def tool_versions() -> ToolVersions:
     )
 
 
-def create_manifest(input_payload: dict[str, Any], output_payload: dict[str, Any]) -> RunManifest:
-    input_hash = sha256_text(canonical_json(input_payload))
-    configuration = {
+def configuration_payload(snapshot_id: str = SNAPSHOT_ID) -> dict[str, Any]:
+    return {
         "pipeline": PIPELINE_VERSION,
         "ruleset": RULESET_VERSION,
-        "snapshot": SNAPSHOT_ID,
+        "chemistry_policy": CHEMISTRY_POLICY_VERSION,
+        "validation_policy": VALIDATION_POLICY_VERSION,
+        "validation": {
+            key: list(value) if isinstance(value, list) else value
+            for key, value in VALIDATION_CONFIGURATION.items()
+        },
+        "standardization": [dict(step) for step in STANDARDIZATION_CONFIGURATION],
+        "descriptors": [dict(descriptor) for descriptor in DESCRIPTOR_CONFIGURATION],
+        "rdkit": rdBase.rdkitVersion,
+        "output_schema": OUTPUT_SCHEMA_VERSION,
+        "canonical_serialization": CANONICAL_SERIALIZATION_VERSION,
+        "snapshot": snapshot_id,
     }
-    configuration_hash = sha256_text(canonical_json(configuration))
+
+
+def configuration_sha256(configuration: dict[str, Any] | None = None) -> str:
+    selected_configuration = configuration_payload() if configuration is None else configuration
+    return sha256_text(canonical_json(selected_configuration))
+
+
+def create_manifest(
+    input_payload: dict[str, Any],
+    output_payload: dict[str, Any],
+    configuration: dict[str, Any] | None = None,
+) -> RunManifest:
+    input_hash = sha256_text(canonical_json(input_payload))
+    configuration_hash = configuration_sha256(configuration)
     output_hash = sha256_text(canonical_json(output_payload))
     analysis_id = f"PL-{input_hash[:8].upper()}-{configuration_hash[:4].upper()}"
     return RunManifest(
