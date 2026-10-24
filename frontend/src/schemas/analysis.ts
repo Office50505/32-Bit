@@ -18,6 +18,10 @@ export interface SourceMetadata {
   source_type?: string;
   citation?: string;
   page?: number;
+  media_type?: string;
+  file_size?: number;
+  file_sha256?: string;
+  extraction_method?: string;
 }
 
 export interface AnalyzeRequest {

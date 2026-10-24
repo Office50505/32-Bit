@@ -16,6 +16,8 @@ ProvenanceLab is a reproducibility-first web application for biotechnology stude
 
 ![ProvenanceLab molecular input workspace](docs/screenshots/input-workspace.png)
 
+The complete product scope, requirements, acceptance criteria, delivery plan, and risk register are available in the [Product Requirements Document](output/pdf/ProvenanceLab_Product_Requirements_Document_v1.0.pdf).
+
 ## Highlights
 
 - **Precise validation:** distinguishes syntax errors, impossible valence, sanitization failures, and unresolved aromaticity.
@@ -39,6 +41,7 @@ ProvenanceLab is a working **SMILES-analysis prototype**, not a finished product
 | Capability | Status | Current behavior |
 | --- | :---: | --- |
 | Direct SMILES input | ✅ Working | Accepts student-entered SMILES and preserves the submitted text |
+| Photo or screenshot source | ✅ Working | Preserves a local image preview and SHA-256 metadata while the student confirms a manual SMILES transcription |
 | Validation and explanatory errors | ✅ Working | Returns structured codes, explanations, locations, consequences, and next steps |
 | Ambiguity detection | ✅ Working | Flags unassigned stereochemistry without inventing a configuration |
 | Molecular visualization | ✅ Working | Generates an RDKit SVG depiction and highlights affected atoms when available |
@@ -46,7 +49,7 @@ ProvenanceLab is a working **SMILES-analysis prototype**, not a finished product
 | Descriptor calculation | ✅ Working | Computes formula, mass, LogP, TPSA, H-bond counts, rotatable bonds, rings, and fraction Csp³ |
 | Run manifest and JSON export | ✅ Working | Records deterministic hashes and tool versions; exports the analyzed response |
 | Frozen PubChem/ChEMBL comparison | ⏳ Not configured | Returns `NOT_AVAILABLE` with `REFERENCE_SNAPSHOT_NOT_CONFIGURED`; no value is fabricated |
-| Paper and image recognition | 🗓️ Planned | Clearly marked unavailable; files are not uploaded or interpreted |
+| Automatic paper/image recognition | 🗓️ Planned | Images are not automatically interpreted; extracted structures must remain untrusted until confirmed |
 | Molecular drawing editor | 🗓️ Planned | Clearly marked unavailable; no placeholder canvas is presented |
 | Persistent run archive and replay | 🗓️ Planned | The current confirmed input is held only in browser session storage |
 
@@ -111,8 +114,8 @@ Open [http://localhost:5173](http://localhost:5173). The Vite development server
 
 ## Use the application
 
-1. Open **New analysis** and choose the available **SMILES** input.
-2. Enter a molecular label if useful, then provide a SMILES string.
+1. Open **New analysis** and choose **SMILES** or **Photo or screenshot**.
+2. Enter a molecular label if useful. For a photo, upload the source image and manually transcribe its SMILES; for direct input, enter the SMILES normally.
 3. Review the generated structure and confirm that it matches the submitted notation.
 4. Inspect validation, property, standardization, evidence, and provenance views.
 5. Download the JSON run record for inspection or later comparison.
@@ -212,7 +215,7 @@ npm run build
 
 - Build and document the 31-case validation test set for broken and challenging inputs.
 - Add versioned, checksum-verified PubChem and ChEMBL snapshot adapters.
-- Add paper/PDF and image extraction with mandatory student confirmation.
+- Add automatic paper/PDF and image extraction with mandatory student confirmation; photo upload and manual transcription are already supported.
 - Add a real molecular drawing editor as a lazy-loaded module.
 - Support adding and comparing multiple student-provided molecules in one run.
 - Persist immutable run records and provide exact replay by manifest.

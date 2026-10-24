@@ -39,3 +39,24 @@ def test_same_request_produces_same_hashes() -> None:
     second = analyze("CCO", "Ethanol")
     assert first["analysis_id"] == second["analysis_id"]
     assert first["manifest"]["output_sha256"] == second["manifest"]["output_sha256"]
+
+
+def test_photo_source_metadata_is_preserved_and_hashed() -> None:
+    source = {
+        "source_type": "photo",
+        "filename": "paper-figure.png",
+        "media_type": "image/png",
+        "file_size": 1024,
+        "file_sha256": "a" * 64,
+        "extraction_method": "manual-smiles-transcription",
+    }
+    response = client.post(
+        "/api/analyze",
+        json={"structure": "CCO", "label": "Ethanol", "source": source},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert all(result["source"][key] == value for key, value in source.items())
+
+    direct = analyze("CCO", "Ethanol")
+    assert result["manifest"]["input_sha256"] != direct["manifest"]["input_sha256"]

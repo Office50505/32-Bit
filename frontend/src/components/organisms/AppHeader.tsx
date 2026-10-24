@@ -1,4 +1,3 @@
-import { Code2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 export function AppHeader() {
@@ -10,15 +9,6 @@ export function AppHeader() {
       <nav className="app-nav" aria-label="Primary navigation">
         <NavLink to="/" end>New analysis</NavLink>
       </nav>
-      <a
-        className="source-link"
-        href="https://github.com/Office50505/32-Bit"
-        target="_blank"
-        rel="noreferrer"
-      >
-        <Code2 size={18} aria-hidden="true" />
-        <span>Source</span>
-      </a>
     </header>
   );
 }

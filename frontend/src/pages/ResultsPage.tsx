@@ -11,6 +11,7 @@ import { RunDetailPanel } from "../components/organisms/RunDetailPanel";
 import { ValidationWorkspace } from "../components/organisms/ValidationWorkspace";
 import { AppShell } from "../components/templates/AppShell";
 import { loadRunDraft } from "../utils/runDraft";
+import type { AnalysisNavigationState } from "./AnalysisPage";
 
 export default function ResultsPage() {
   const navigate = useNavigate();
@@ -31,6 +32,11 @@ export default function ResultsPage() {
   const validCount = results.filter((result) => result.status !== "invalid").length;
   const invalidCount = results.filter((result) => result.status === "invalid").length;
   const runMatchesRoute = !results.length || runId === results[0]?.analysis_id;
+
+  const returnToInput = (intent: AnalysisNavigationState["intent"]) => {
+    const draft = molecules[Math.min(selectedIndex, Math.max(0, molecules.length - 1))];
+    navigate("/", { state: { draft, intent } satisfies AnalysisNavigationState });
+  };
 
   const downloadRun = () => {
     if (!results.length) return;
@@ -79,7 +85,8 @@ export default function ResultsPage() {
             results={results}
             selectedIndex={selectedIndex}
             onSelect={setSelectedIndex}
-            onReviewSource={() => navigate("/")}
+            onEditStructure={() => returnToInput("edit")}
+            onReviewSource={() => returnToInput("review-source")}
           />
           <RunTabs active={activeTab} onChange={setActiveTab} />
           <RunDetailPanel activeTab={activeTab} results={results} selected={selected} />

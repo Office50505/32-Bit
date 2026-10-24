@@ -371,6 +371,8 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
     response_payload = {
         "label": request.label or "Untitled molecule",
         "raw_input": request.structure,
+        "input_type": "smiles",
+        "source": request.source.model_dump(mode="json") if request.source else None,
         "status": status,
         "canonical_smiles": canonical_smiles,
         "standardized_smiles": standardized_smiles,

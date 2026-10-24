@@ -24,6 +24,7 @@ export function CandidatePanel({
 }: CandidatePanelProps) {
   const formula = candidate?.properties.find((item) => item.key === "molecular_formula")?.computed;
   const weight = candidate?.properties.find((item) => item.key === "molecular_weight")?.computed;
+  const isPhotoSource = candidate?.source?.source_type === "photo";
 
   return (
     <section className="candidate-panel" aria-label="Molecular structure preview">
@@ -36,7 +37,11 @@ export function CandidatePanel({
         <div className="confirmation-notice">
           <AlertTriangle size={22} aria-hidden="true" />
           <strong>Review before analysis</strong>
-          <span>Confirm that the rendered structure matches the SMILES you entered.</span>
+          <span>
+            {isPhotoSource
+              ? "Confirm that the rendered structure matches both the source image and your SMILES transcription."
+              : "Confirm that the rendered structure matches the SMILES you entered."}
+          </span>
         </div>
       ) : null}
 
@@ -58,7 +63,10 @@ export function CandidatePanel({
             <div><dt>Molecular formula</dt><dd>{formula?.value ?? "Unknown"}</dd></div>
             <div><dt>Molecular weight</dt><dd>{weight?.value ?? "Unknown"} {weight?.unit}</dd></div>
             <div><dt>Submitted SMILES</dt><dd><code>{candidate.raw_input}</code></dd></div>
-            <div><dt>Input source</dt><dd>Direct entry</dd></div>
+            <div>
+              <dt>Input source</dt>
+              <dd>{isPhotoSource ? `Photo or screenshot · ${candidate.source?.filename ?? "Unnamed image"}` : "Direct SMILES entry"}</dd>
+            </div>
           </dl>
         </>
       ) : (

@@ -9,6 +9,7 @@ interface ValidationWorkspaceProps {
   results: AnalyzeResponse[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+  onEditStructure: () => void;
   onReviewSource: () => void;
 }
 
@@ -16,6 +17,7 @@ export function ValidationWorkspace({
   results,
   selectedIndex,
   onSelect,
+  onEditStructure,
   onReviewSource,
 }: ValidationWorkspaceProps) {
   const selected = results[selectedIndex] ?? results[0];
@@ -39,7 +41,7 @@ export function ValidationWorkspace({
         <div className="molecule-detail__visual">
           <h2>{selected.label}</h2>
           <MoleculeSvg svg={selected.depiction_svg} label={`${selected.label} annotated structure`} />
-          <Button variant="quiet" icon={<PenLine size={17} />} onClick={onReviewSource}>Edit structure</Button>
+          <Button variant="quiet" icon={<PenLine size={17} />} onClick={onEditStructure}>Edit structure</Button>
         </div>
 
         <article className={`issue-detail issue-detail--${primaryIssue?.severity ?? "info"}`}>

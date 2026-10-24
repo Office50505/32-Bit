@@ -77,6 +77,10 @@ class SourceMetadata(BaseModel):
     source_type: str | None = None
     citation: str | None = None
     page: int | None = None
+    media_type: str | None = None
+    file_size: int | None = Field(default=None, ge=0)
+    file_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    extraction_method: str | None = None
 
 
 class AnalyzeRequest(BaseModel):
