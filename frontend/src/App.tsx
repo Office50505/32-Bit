@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 import {
   AlertCircle,
@@ -24,6 +24,7 @@ import {
   createAnalysisRun,
   downloadRunReport,
   extractMoleculeImage,
+  prepareImageExtractionEngine,
 } from "./api/analysis";
 import type { MoleculeCandidate, StepId } from "./domain";
 import { LiveMoleculeSvg } from "./LiveMoleculeSvg";
@@ -31,6 +32,7 @@ import { fromApi } from "./live";
 import type {
   AnalyzeRequest,
   AnalyzeResponse,
+  ExtractionEngineStatus,
   ImageExtractionResponse,
   RunResponse,
 } from "./schemas/analysis";
@@ -83,11 +85,15 @@ export default function App() {
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [fileError, setFileError] = useState("");
   const [extracting, setExtracting] = useState(false);
+  const [extractionStatus, setExtractionStatus] = useState<ExtractionEngineStatus | null>(null);
   const [imageExtraction, setImageExtraction] = useState<ImageExtractionResponse | null>(null);
   const [extractionMethod, setExtractionMethod] = useState<string | null>(null);
   const [sourceFiles, setSourceFiles] = useState<Record<string, BrowserSource>>({});
   const sourceDialogRef = useRef<HTMLDialogElement>(null);
   const fileRequestRef = useRef(0);
+  const extractionAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => extractionAbortRef.current?.abort(), []);
 
   const selected = molecules.find((item) => item.id === selectedId) ?? molecules[0] ?? null;
   const filtered = useMemo(
@@ -99,6 +105,8 @@ export default function App() {
   const selectedSource = selected?.sourceFileSha256 ? sourceFiles[selected.sourceFileSha256] : undefined;
 
   function clearDraft() {
+    extractionAbortRef.current?.abort();
+    extractionAbortRef.current = null;
     fileRequestRef.current += 1;
     setDraftLabel("");
     setDraftSmiles("");
@@ -110,6 +118,7 @@ export default function App() {
     setFileHash(null);
     setFileError("");
     setExtracting(false);
+    setExtractionStatus(null);
     setImageExtraction(null);
     setExtractionMethod(null);
     setActionError("");
@@ -129,6 +138,8 @@ export default function App() {
   }
 
   function changeMode(next: InputMode) {
+    extractionAbortRef.current?.abort();
+    extractionAbortRef.current = null;
     fileRequestRef.current += 1;
     setMode(next);
     setFile(null);
@@ -136,6 +147,7 @@ export default function App() {
     setFileHash(null);
     setFileError("");
     setExtracting(false);
+    setExtractionStatus(null);
     setImageExtraction(null);
     setExtractionMethod(null);
     setPreview(null);
@@ -143,6 +155,7 @@ export default function App() {
 
   async function chooseFile(next?: File) {
     if (!next) return;
+    extractionAbortRef.current?.abort();
     const requestId = ++fileRequestRef.current;
     const isPaper = mode === "paper";
     const accepted = isPaper
@@ -162,13 +175,21 @@ export default function App() {
     setFileError("");
     setFileHash(null);
     setImageExtraction(null);
+    setExtractionStatus(null);
     setExtractionMethod(isPaper ? "manual-smiles-transcription" : null);
     if (!isPaper) {
       setDraftSmiles("");
       setExtracting(true);
     }
+    const extractionController = isPaper ? null : new AbortController();
+    extractionAbortRef.current = extractionController;
     try {
-      const extractionPromise = isPaper ? null : extractMoleculeImage(next);
+      const extractionPromise = isPaper ? null : prepareImageExtractionEngine({
+        signal: extractionController?.signal,
+        onStatus: (status) => {
+          if (requestId === fileRequestRef.current) setExtractionStatus(status);
+        },
+      }).then(() => extractMoleculeImage(next, { signal: extractionController?.signal }));
       const digest = await crypto.subtle.digest("SHA-256", await next.arrayBuffer());
       const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
       if (requestId !== fileRequestRef.current) return;
@@ -186,9 +207,13 @@ export default function App() {
           setDraftSmiles(extraction.candidate_smiles);
         } catch (error) {
           if (requestId !== fileRequestRef.current) return;
-          setFileError(error instanceof Error ? error.message : "DECIMER could not transcribe this image.");
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setFileError(error instanceof Error ? error.message : "MolNexTR could not transcribe this image.");
         } finally {
-          if (requestId === fileRequestRef.current) setExtracting(false);
+          if (requestId === fileRequestRef.current) {
+            setExtracting(false);
+            extractionAbortRef.current = null;
+          }
         }
       }
     } catch {
@@ -197,6 +222,7 @@ export default function App() {
       setFile(null);
       setFileUrl(null);
       setExtracting(false);
+      setExtractionStatus(null);
       setFileError("This file could not be hashed. Choose it again before continuing.");
     }
   }
@@ -364,20 +390,20 @@ export default function App() {
                 <input type="file" accept={mode === "paper" ? ".pdf,application/pdf" : ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"} onChange={(event: ChangeEvent<HTMLInputElement>) => { void chooseFile(event.target.files?.[0]); event.target.value = ""; }} />
                 <UploadCloud size={30} strokeWidth={1.5} />
                 <strong>{file ? file.name : mode === "paper" ? "Drop a PDF here" : "Drop a molecular structure image here"}</strong>
-                <span>{file ? mode === "photo" ? "Image uploaded; DECIMER recognition runs automatically." : "PDF hashed locally; enter the structure from the selected page." : mode === "paper" ? "PDF only · up to 5 MB" : "PNG, JPEG, or WebP · up to 5 MB"}</span>
+                <span>{file ? mode === "photo" ? "Image uploaded; MolNexTR recognition runs automatically." : "PDF hashed locally; enter the structure from the selected page." : mode === "paper" ? "PDF only · up to 5 MB" : "PNG, JPEG, or WebP · up to 5 MB"}</span>
               </label>
-              {mode === "photo" && extracting ? <div className="extraction-state extraction-state--working" role="status"><LoaderCircle size={18} /><div><strong>DECIMER is transcribing the structure</strong><span>The first local run also loads the recognition models and may take longer.</span></div></div> : null}
-              {mode === "photo" && imageExtraction ? <div className="extraction-state extraction-state--ready"><ScanLine size={18} /><div><strong>Candidate generated by DECIMER {imageExtraction.model_version}</strong><span>{imageExtraction.confidence_mean === null || imageExtraction.confidence_mean === undefined ? "Token confidence was not reported." : `Mean token confidence ${(imageExtraction.confidence_mean * 100).toFixed(1)}%.`} Verify every atom and bond against the image.</span></div></div> : null}
+              {mode === "photo" && extracting ? <div className="extraction-state extraction-state--working" role="status"><LoaderCircle size={18} /><div><strong>{extractionStatus?.stage === "loading" ? "Loading MolNexTR into memory" : extractionStatus?.ready ? "MolNexTR is transcribing the structure" : "Preparing MolNexTR image recognition"}</strong><span>{extractionStatus?.message ?? "Checking the pinned local MolNexTR engine."}</span></div></div> : null}
+              {mode === "photo" && imageExtraction ? <div className="extraction-state extraction-state--ready"><ScanLine size={18} /><div><strong>Candidate generated by MolNexTR {imageExtraction.model_version}</strong><span>Confidence is not calibrated, so no score is invented. Verify every atom and bond against the image.</span></div></div> : null}
               {fileError ? <p className="form-error" role="alert">{fileError}</p> : null}
             </> : <div className="direct-input-intro"><Atom size={27} /><div><strong>Direct molecular notation</strong><p>No PDF or image is required for a SMILES submission.</p></div></div>}
             <div className="source-fields">
               <label>Molecule label <span>Optional</span><input value={draftLabel} onChange={(event) => setDraftLabel(event.target.value)} maxLength={200} placeholder="e.g. Compound 7b" /></label>
               {mode === "paper" ? <label>Page number <span>Optional</span><input type="number" min="1" value={draftPage} onChange={(event) => setDraftPage(event.target.value)} placeholder="e.g. 4" /></label> : null}
-              <label>{mode === "smiles" ? "SMILES string" : mode === "photo" ? "DECIMER candidate SMILES" : "SMILES transcription"} <span>{mode === "photo" ? "Editable · verify" : "Required"}</span><textarea value={draftSmiles} onChange={(event) => setDraftSmiles(event.target.value)} rows={5} maxLength={20_000} spellCheck={false} placeholder={mode === "smiles" ? "Paste or type a SMILES string" : mode === "photo" ? "Upload an image to generate a candidate automatically" : "Transcribe the structure shown on the selected page"} /></label>
-              <p>{mode === "smiles" ? "The exact submitted text is hashed. Any standardization is recorded separately." : mode === "photo" ? "DECIMER output is an untrusted candidate. Compare it with the source image before review; edits are preserved." : "PDF structure recognition is not enabled yet. Confirm that the manual transcription matches the source."}</p>
+              <label>{mode === "smiles" ? "SMILES string" : mode === "photo" ? "MolNexTR candidate SMILES" : "SMILES transcription"} <span>{mode === "photo" ? "Editable · verify" : "Required"}</span><textarea value={draftSmiles} onChange={(event) => setDraftSmiles(event.target.value)} rows={5} maxLength={20_000} spellCheck={false} placeholder={mode === "smiles" ? "Paste or type a SMILES string" : mode === "photo" ? "Upload an image to generate a candidate automatically" : "Transcribe the structure shown on the selected page"} /></label>
+              <p>{mode === "smiles" ? "The exact submitted text is hashed. Any standardization is recorded separately." : mode === "photo" ? "MolNexTR output is an untrusted candidate. Compare it with the source image before review; edits are preserved." : "PDF structure recognition is not enabled yet. Confirm that the manual transcription matches the source."}</p>
               <button className="button button--primary" disabled={reviewing || extracting || !draftSmiles.trim()} onClick={() => void reviewCandidate()}>{extracting ? "Transcribing image…" : reviewing ? "Running RDKit…" : "Review candidate"} <ArrowRight size={16} /></button>
             </div>
-          </div><aside className="input-guidance"><div className="example-head"><h3>Input contract</h3><p>What the pipeline will and will not do</p></div><ul><li><Check size={16} /> {mode === "photo" ? "Generate an editable SMILES candidate with DECIMER." : "Validate the submitted SMILES with RDKit."}</li><li><Check size={16} /> Preserve source metadata and hashes.</li><li><Check size={16} /> Explain invalidity and ambiguity separately.</li><li><X size={16} /> {mode === "photo" ? "Never treat image recognition as confirmed without your review." : mode === "paper" ? "Never claim that the PDF was interpreted automatically." : "Never silently repair the submitted structure."}</li><li><X size={16} /> Never fill a missing value.</li></ul></aside></div>
+          </div><aside className="input-guidance"><div className="example-head"><h3>Input contract</h3><p>What the pipeline will and will not do</p></div><ul><li><Check size={16} /> {mode === "photo" ? "Generate an editable SMILES candidate with MolNexTR." : "Validate the submitted SMILES with RDKit."}</li><li><Check size={16} /> Preserve source metadata and hashes.</li><li><Check size={16} /> Explain invalidity and ambiguity separately.</li><li><X size={16} /> {mode === "photo" ? "Never treat image recognition as confirmed without your review." : mode === "paper" ? "Never claim that the PDF was interpreted automatically." : "Never silently repair the submitted structure."}</li><li><X size={16} /> Never fill a missing value.</li></ul></aside></div>
         </section>}
 
         {step === "confirm" && preview && <section className="confirmation-screen"><div className="section-head"><div><h2>Source and candidate</h2><p>Confirm the transcription only after comparing it with its source.</p></div><span className="section-kicker">02 / CONFIRM</span></div><div className="confirm-grid"><div className="source-preview"><div className="panel-title"><FileImage size={17} /><strong>Original source</strong><span>{file?.name ?? "Direct SMILES"}</span></div><div className="document-surface">{fileUrl && file?.type.startsWith("image/") ? <img src={fileUrl} alt={`Uploaded source ${file.name}`} /> : fileUrl && file?.type === "application/pdf" ? <iframe src={fileUrl} title={`Uploaded source ${file.name}`} /> : <div className="direct-source-preview"><Atom size={58} /><strong>Direct SMILES entry</strong><code>{draftSmiles}</code><small>No source document was attached to this record.</small></div>}</div></div>

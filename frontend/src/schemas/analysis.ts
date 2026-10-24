@@ -134,11 +134,26 @@ export interface TokenConfidence {
   confidence: number;
 }
 
+export interface ExtractionEngineStatus {
+  stage: "not_ready" | "downloading" | "extracting" | "loading" | "ready" | "error";
+  engine: "MolNexTR";
+  model_kind: "general";
+  ready: boolean;
+  message: string;
+  bytes_downloaded: number;
+  bytes_total?: number | null;
+  progress_percent?: number | null;
+  model_version: string;
+  error_code?: string | null;
+  technical_detail?: string | null;
+}
+
 export interface ImageExtractionResponse {
   status: "candidate";
   candidate_smiles: string;
-  method: "DECIMER-Image-Transformer";
+  method: "MolNexTR-Graph-Recognizer";
   model_version: string;
+  device?: string | null;
   source_sha256: string;
   filename: string;
   media_type: "image/png" | "image/jpeg" | "image/webp";

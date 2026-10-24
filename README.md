@@ -26,7 +26,7 @@ The complete product scope, requirements, acceptance criteria, delivery plan, an
 - **Traceable standardization:** cleanup, parent-fragment selection, charge normalization, and tautomer selection are recorded step by step.
 - **Honest missing data:** unavailable, not applicable, outside coverage, and computation failure remain distinct machine-readable states.
 - **Reproducible outputs:** each response records SHA-256 hashes, the ruleset, pipeline version, Python version, and RDKit version.
-- **No trained model required:** the current chemistry pipeline is deterministic and rule based.
+- **Deterministic chemistry:** validation and property computation are rule based; the optional image transcription path uses a pinned MolNexTR checkpoint and always requires human confirmation.
 
 ## Why ProvenanceLab?
 
@@ -43,7 +43,7 @@ The validation workspace opens on the invalid demo record to show the atom-level
 | Capability | Status | Current behavior |
 | --- | :---: | --- |
 | Direct SMILES input | ✅ Working | Accepts student-entered SMILES and preserves the submitted text |
-| Photo or screenshot source | ✅ Working | Sends PNG, JPEG, or WebP depictions to local DECIMER, returns an editable SMILES candidate with token confidence, and requires source comparison before confirmation |
+| Photo or screenshot source | ✅ Working | Sends PNG, JPEG, or WebP depictions to local MolNexTR, returns an editable SMILES candidate, and requires source comparison before confirmation; no uncalibrated confidence is invented |
 | Validation and explanatory errors | ✅ Working | Returns structured codes, explanations, locations, consequences, and next steps |
 | Ambiguity detection | ✅ Working | Flags unassigned tetrahedral and E/Z stereochemistry without inventing a configuration |
 | HM-01 edge-case corpus | ✅ Working | Runs 31 declared chemistry cases plus API-boundary and repeated-hash checks |
@@ -52,7 +52,7 @@ The validation workspace opens on the invalid demo record to show the atom-level
 | Descriptor calculation | ✅ Working | Computes formula, mass, LogP, TPSA, H-bond counts, rotatable bonds, rings, and fraction Csp³ |
 | Run manifest and JSON export | ✅ Working | Records deterministic hashes and tool versions; exports the analyzed response |
 | Frozen PubChem/ChEMBL comparison | ⏳ Not configured | Returns `NOT_AVAILABLE` with `REFERENCE_SNAPSHOT_NOT_CONFIGURED`; no value is fabricated |
-| Automatic paper/image recognition | 🗓️ Planned | Images are not automatically interpreted; extracted structures must remain untrusted until confirmed |
+| Automatic paper recognition | 🗓️ Planned | PDF pages are not automatically segmented or interpreted; manual transcription remains explicit |
 | Molecular drawing editor | 🗓️ Planned | Clearly marked unavailable; no placeholder canvas is presented |
 | Persistent run archive and replay | 🗓️ Planned | The current confirmed input is held only in browser session storage |
 
@@ -97,6 +97,20 @@ cd frontend
 npm ci
 cd ..
 ```
+
+### Optional: local image-to-SMILES recognition
+
+MolNexTR runs in a separate environment so its PyTorch stack cannot disturb the deterministic RDKit API. The model is loaded once and reused across image requests.
+
+```bash
+python3.11 -m venv .data/molnextr-venv
+.data/molnextr-venv/bin/pip install -r backend/molnextr-requirements.txt
+mkdir -p .data/molnextr
+# Place the official checkpoint at .data/molnextr/molnextr_best.pth
+shasum -a 256 .data/molnextr/molnextr_best.pth
+```
+
+The required checkpoint is [`molnextr_best.pth`](https://huggingface.co/datasets/CYF200127/MolNexTR/resolve/main/molnextr_best.pth?download=true), exactly 1,134,334,833 bytes with SHA-256 `5990bc19aaafa5cf44e9d04e06fb8e2b5aea50c66e1e925f662bdff7d2a6422c`. ProvenanceLab refuses to load a file that does not match both values.
 
 ### 2. Start the API
 
@@ -218,7 +232,7 @@ npm run build
 
 - Expand the versioned edge-case corpus as new failure classes are discovered.
 - Add versioned, checksum-verified PubChem and ChEMBL snapshot adapters.
-- Add automatic paper/PDF segmentation and structure extraction; image recognition with mandatory student confirmation is already supported through DECIMER.
+- Add automatic paper/PDF segmentation and structure extraction; image recognition with mandatory student confirmation is already supported through MolNexTR.
 - Add a real molecular drawing editor as a lazy-loaded module.
 - Support adding and comparing multiple student-provided molecules in one run.
 - Persist immutable run records and provide exact replay by manifest.

@@ -11,12 +11,18 @@ from app.models.analysis import (
     AnalyzeResponse,
     BatchAnalyzeRequest,
     BatchAnalyzeResponse,
+    ExtractionEngineStatus,
     HealthResponse,
     ImageExtractionResponse,
     RunResponse,
 )
 from app.services.chemistry import analyze_structure
-from app.services.image_recognition import MAX_IMAGE_BYTES, recognize_image
+from app.services.image_recognition import (
+    MAX_IMAGE_BYTES,
+    extraction_engine_status,
+    prepare_extraction_engine,
+    recognize_image,
+)
 from app.services.report import build_run_pdf
 from app.services.runs import create_run, get_run
 
@@ -44,6 +50,16 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 @router.post("/analyze/batch", response_model=BatchAnalyzeResponse)
 def analyze_batch(request: BatchAnalyzeRequest) -> BatchAnalyzeResponse:
     return BatchAnalyzeResponse(results=[analyze_structure(item) for item in request.molecules])
+
+
+@router.get("/extract/image/engine", response_model=ExtractionEngineStatus)
+def read_extraction_engine(hand_drawn: bool = False) -> ExtractionEngineStatus:
+    return extraction_engine_status(hand_drawn=hand_drawn)
+
+
+@router.post("/extract/image/engine/prepare", response_model=ExtractionEngineStatus)
+def prepare_image_extraction_engine(hand_drawn: bool = False) -> ExtractionEngineStatus:
+    return prepare_extraction_engine(hand_drawn=hand_drawn)
 
 
 @router.post("/extract/image", response_model=ImageExtractionResponse)

@@ -226,11 +226,26 @@ class TokenConfidence(ApiModel):
     confidence: float = Field(ge=0, le=1)
 
 
+class ExtractionEngineStatus(ApiModel):
+    stage: Literal["not_ready", "downloading", "extracting", "loading", "ready", "error"]
+    engine: Literal["MolNexTR"] = "MolNexTR"
+    model_kind: Literal["general"] = "general"
+    ready: bool
+    message: str
+    bytes_downloaded: int = Field(default=0, ge=0)
+    bytes_total: int | None = Field(default=None, ge=0)
+    progress_percent: float | None = Field(default=None, ge=0, le=100)
+    model_version: str
+    error_code: str | None = None
+    technical_detail: str | None = None
+
+
 class ImageExtractionResponse(ApiModel):
     status: Literal["candidate"] = "candidate"
     candidate_smiles: str
-    method: Literal["DECIMER-Image-Transformer"] = "DECIMER-Image-Transformer"
+    method: Literal["MolNexTR-Graph-Recognizer"] = "MolNexTR-Graph-Recognizer"
     model_version: str
+    device: str | None = None
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     filename: str
     media_type: Literal["image/png", "image/jpeg", "image/webp"]

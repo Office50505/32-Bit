@@ -3,11 +3,51 @@ import type {
   AnalyzeResponse,
   ApiErrorResponse,
   BatchAnalyzeResponse,
+  ExtractionEngineStatus,
   ImageExtractionResponse,
   RunResponse,
 } from "../schemas/analysis";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+  const forwardAbort = () => controller.abort(upstreamSignal?.reason);
+  upstreamSignal?.addEventListener("abort", forwardAbort, { once: true });
+  const timeout = window.setTimeout(
+    () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+    timeoutMs,
+  );
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+    upstreamSignal?.removeEventListener("abort", forwardAbort);
+  }
+}
+
+function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const handleAbort = () => {
+      window.clearTimeout(timeout);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    const timeout = window.setTimeout(() => {
+      signal?.removeEventListener("abort", handleAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", handleAbort, { once: true });
+  });
+}
 
 async function readApiError(response: Response): Promise<string> {
   try {
@@ -86,11 +126,61 @@ export async function extractMoleculeImage(
   const body = new FormData();
   body.append("image", image, image.name);
   body.append("hand_drawn", String(options.handDrawn ?? false));
-  const response = await fetch("/api/extract/image", {
+  const response = await fetchWithTimeout("/api/extract/image", {
     method: "POST",
     body,
     signal: options.signal,
-  });
+  }, 120_000);
   if (!response.ok) throw new Error(await readApiError(response));
   return (await response.json()) as ImageExtractionResponse;
+}
+
+async function readExtractionEngine(
+  handDrawn: boolean,
+  signal?: AbortSignal,
+): Promise<ExtractionEngineStatus> {
+  const response = await fetchWithTimeout(
+    `/api/extract/image/engine?hand_drawn=${String(handDrawn)}`,
+    { signal },
+    15_000,
+  );
+  if (!response.ok) throw new Error(await readApiError(response));
+  return (await response.json()) as ExtractionEngineStatus;
+}
+
+export async function prepareImageExtractionEngine(options: {
+  handDrawn?: boolean;
+  signal?: AbortSignal;
+  onStatus?: (status: ExtractionEngineStatus) => void;
+  timeoutMs?: number;
+} = {}): Promise<ExtractionEngineStatus> {
+  const handDrawn = options.handDrawn ?? false;
+  const startedAt = Date.now();
+  const prepare = async () => {
+    const response = await fetchWithTimeout(
+      `/api/extract/image/engine/prepare?hand_drawn=${String(handDrawn)}`,
+      { method: "POST", signal: options.signal },
+      15_000,
+    );
+    if (!response.ok) throw new Error(await readApiError(response));
+    return (await response.json()) as ExtractionEngineStatus;
+  };
+  let status = await prepare();
+  options.onStatus?.(status);
+
+  while (!status.ready) {
+    if (status.stage === "error") {
+      throw new Error(`${status.error_code ?? "EXTRACTION_ENGINE_ERROR"}: ${status.message}`);
+    }
+    if (Date.now() - startedAt > (options.timeoutMs ?? 10 * 60_000)) {
+      throw new Error(
+        "EXTRACTION_ENGINE_TIMEOUT: MolNexTR did not finish loading within 10 minutes. Retry after checking the local engine.",
+      );
+    }
+    await wait(750, options.signal);
+    status = await readExtractionEngine(handDrawn, options.signal);
+    if (status.stage === "not_ready") status = await prepare();
+    options.onStatus?.(status);
+  }
+  return status;
 }
