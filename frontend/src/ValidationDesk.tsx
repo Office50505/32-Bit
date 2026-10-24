@@ -56,7 +56,6 @@ export function ValidationDesk({
   const [tab, setTab] = useState<AuditTab>("validation");
   const [view, setView] = useState<"2d" | "3d">("2d");
   const [autorotate, setAutorotate] = useState(false);
-  const [showLabels, setShowLabels] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [resetSignal, setResetSignal] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
@@ -83,9 +82,9 @@ export function ValidationDesk({
 
       <div className="viewer-panel panel">
         <div className="viewer-heading"><div><h2>Molecular view</h2><p>{selected.label} · {view === "2d" ? "RDKit depiction tied to validation findings" : "illustrative layout derived from submitted SMILES"}</p></div><div className="view-switch" role="group" aria-label="View dimension"><button className={view === "2d" ? "active" : ""} onClick={() => setView("2d")}>2D evidence view</button><button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>3D sketch</button></div></div>
-        <div className="viewer-options">{view === "3d" ? <><label className="toggle-label">Atom labels <input type="checkbox" checked={showLabels} onChange={(event) => setShowLabels(event.target.checked)} /><span className="toggle-track" /></label><label className="toggle-label">Autorotate <input type="checkbox" checked={autorotate} onChange={(event) => setAutorotate(event.target.checked)} /><span className="toggle-track" /></label></> : <span className="viewer-mode-note">Evidence-backed 2D depiction</span>}</div>
+        <div className="viewer-options">{view === "3d" ? <label className="toggle-label">Autorotate <input type="checkbox" checked={autorotate} onChange={(event) => setAutorotate(event.target.checked)} /><span className="toggle-track" /></label> : <span className="viewer-mode-note">Evidence-backed 2D depiction</span>}</div>
         <div className={`viewer-canvas ${view === "2d" ? "viewer-canvas--2d" : "viewer-canvas--3d"}`}>
-          {view === "2d" ? <LiveMoleculeSvg svg={selected.depictionSvg} zoom={zoom} /> : <Suspense fallback={<div className="viewer-loading">Loading 3D sketch…</div>}><Molecule3D key={selected.id} smiles={selected.smiles} label={selected.label} autorotate={autorotate} showLabels={showLabels} highlightedAtoms={highlightedAtoms} resetSignal={resetSignal} zoom={zoom} /></Suspense>}
+          {view === "2d" ? <LiveMoleculeSvg svg={selected.depictionSvg} zoom={zoom} /> : <Suspense fallback={<div className="viewer-loading">Loading 3D sketch…</div>}><Molecule3D key={selected.id} smiles={selected.smiles} label={selected.label} autorotate={autorotate} highlightedAtoms={highlightedAtoms} resetSignal={resetSignal} zoom={zoom} /></Suspense>}
           {view === "3d" ? <span className="viewer-watermark">Illustrative coordinates · not a validated conformer</span> : null}
         </div>
         <div className="viewer-toolbar"><div className="zoom-control"><button onClick={() => changeZoom(-1)} aria-label="Zoom out"><Minus size={17} /></button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(1)} aria-label="Zoom in"><Plus size={17} /></button></div>

@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { ArrowUp, ChevronDown, FlaskConical, ShieldCheck, X } from "lucide-react";
 
 import { checkEvidenceClaim } from "./api/evidence";
@@ -27,6 +27,38 @@ const SUGGESTIONS = [
   "Imatinib inhibits ABL1.",
   "What is the difference between L-alanine and D-alanine?",
 ];
+
+const ASSISTANT_IMAGE = "/miss-minutes-assistant.png";
+const VIEWPORT_MARGIN = 12;
+
+interface AssistantPosition {
+  x: number;
+  y: number;
+}
+
+interface DragState {
+  pointerId: number;
+  originX: number;
+  pointerX: number;
+  pointerY: number;
+  moved: boolean;
+}
+
+function MissMinutesFigure() {
+  const imageProps = {
+    src: ASSISTANT_IMAGE,
+    alt: "",
+    draggable: false,
+  } as const;
+
+  return <span className="miss-minutes-character" aria-hidden="true">
+    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__torso" />
+    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__arm miss-minutes-character__arm--wave" />
+    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__arm miss-minutes-character__arm--right" />
+    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__leg miss-minutes-character__leg--left" />
+    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__leg miss-minutes-character__leg--right" />
+  </span>;
+}
 
 function isGreeting(value: string): boolean {
   return /^(?:hi|hey|hello|yo|good\s+(?:morning|afternoon|evening))[!.\s]*$/i.test(value);
@@ -118,7 +150,121 @@ export function BenzoAssistant() {
   const [claim, setClaim] = useState("");
   const [items, setItems] = useState<ConversationItem[]>([]);
   const [checking, setChecking] = useState(false);
+  const [position, setPosition] = useState<AssistantPosition | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [walking, setWalking] = useState(false);
+  const [facing, setFacing] = useState<"left" | "right">("left");
   const sequence = useRef(0);
+  const shellRef = useRef<HTMLElement>(null);
+  const positionRef = useRef<AssistantPosition | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const suppressClickRef = useRef(false);
+
+  function clampToBottomTrack(x: number): AssistantPosition {
+    const shell = shellRef.current;
+    const width = shell?.offsetWidth ?? 150;
+    const height = shell?.offsetHeight ?? 154;
+    return {
+      x: Math.max(VIEWPORT_MARGIN, Math.min(x, window.innerWidth - width - VIEWPORT_MARGIN)),
+      y: Math.max(VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN),
+    };
+  }
+
+  function moveTo(next: AssistantPosition) {
+    positionRef.current = next;
+    setPosition(next);
+  }
+
+  useEffect(() => {
+    const placeOrClamp = () => {
+      const shell = shellRef.current;
+      if (!shell) return;
+      const current = positionRef.current;
+      moveTo(current
+        ? clampToBottomTrack(current.x)
+        : clampToBottomTrack(window.innerWidth - shell.offsetWidth - 22));
+    };
+    const frame = window.requestAnimationFrame(placeOrClamp);
+    window.addEventListener("resize", placeOrClamp);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", placeOrClamp);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open || dragging || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setWalking(false);
+      return;
+    }
+
+    let finishTimer = 0;
+    const roam = () => {
+      const shell = shellRef.current;
+      if (!shell) return;
+      const maximumX = Math.max(VIEWPORT_MARGIN, window.innerWidth - shell.offsetWidth - VIEWPORT_MARGIN);
+      const current = positionRef.current;
+      const midpoint = VIEWPORT_MARGIN + (maximumX - VIEWPORT_MARGIN) / 2;
+      const targetX = (current?.x ?? maximumX) > midpoint ? VIEWPORT_MARGIN : maximumX;
+      const next = clampToBottomTrack(targetX);
+      setFacing(targetX >= (current?.x ?? targetX) ? "right" : "left");
+      setWalking(true);
+      moveTo(next);
+      window.clearTimeout(finishTimer);
+      finishTimer = window.setTimeout(() => setWalking(false), 4600);
+    };
+
+    const firstMove = window.setTimeout(roam, 1400);
+    const interval = window.setInterval(roam, 6800);
+    return () => {
+      window.clearTimeout(firstMove);
+      window.clearInterval(interval);
+      window.clearTimeout(finishTimer);
+    };
+  }, [dragging, open]);
+
+  function beginDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (open || event.button !== 0) return;
+    const shell = shellRef.current;
+    if (!shell) return;
+    const bounds = shell.getBoundingClientRect();
+    const current = positionRef.current ?? { x: bounds.left, y: bounds.top };
+    moveTo(current);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      originX: current.x,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setWalking(false);
+    setDragging(true);
+  }
+
+  function continueDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.pointerX;
+    const deltaY = event.clientY - drag.pointerY;
+    if (Math.hypot(deltaX, deltaY) > 4) drag.moved = true;
+    if (Math.abs(deltaX) > 1) setFacing(deltaX > 0 ? "right" : "left");
+    moveTo(clampToBottomTrack(drag.originX + deltaX));
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    suppressClickRef.current = drag.moved;
+    dragRef.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  }
 
   async function submitClaim(event?: FormEvent) {
     event?.preventDefault();
@@ -152,7 +298,7 @@ export function BenzoAssistant() {
         { id: ++sequence.current, role: "assistant", response },
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Benzo could not check this claim.";
+      const message = error instanceof Error ? error.message : "Miss Minutes could not check this claim.";
       setItems((current) => [
         ...current,
         { id: ++sequence.current, role: "error", text: message },
@@ -166,17 +312,25 @@ export function BenzoAssistant() {
     setClaim(suggestion);
   }
 
-  return <aside className={`benzo-shell ${open ? "benzo-shell--open" : ""}`}>
+  const positionStyle = !open && position
+    ? { left: position.x, top: position.y, right: "auto", bottom: "auto" }
+    : undefined;
+
+  return <aside
+    ref={shellRef}
+    className={`benzo-shell${open ? " benzo-shell--open" : ""}${walking ? " benzo-shell--walking" : ""}${dragging ? " benzo-shell--dragging" : ""} benzo-shell--facing-${facing}`}
+    style={positionStyle}
+  >
     {open ? <section
       id="benzo-assistant-panel"
       className="benzo-panel"
       role="dialog"
-      aria-label="Benzo evidence assistant"
+      aria-label="Miss Minutes evidence assistant"
     >
       <header className="benzo-header">
-        <img src="/benzo-happy.png" alt="" />
-        <div><strong>Ask Benzo</strong><span><i /> Frozen evidence assistant</span></div>
-        <button type="button" onClick={() => setOpen(false)} aria-label="Close Benzo assistant">
+        <img src={ASSISTANT_IMAGE} alt="" />
+        <div><strong>Ask Miss Minutes</strong><span><i /> Frozen evidence assistant</span></div>
+        <button type="button" onClick={() => setOpen(false)} aria-label="Close Miss Minutes assistant">
           <X size={18} />
         </button>
       </header>
@@ -201,7 +355,7 @@ export function BenzoAssistant() {
           : item.role === "error"
             ? <div key={item.id} className="benzo-message benzo-message--error"><strong>Couldn’t check that claim</strong><span>{item.text}</span></div>
             : <AssistantResponse key={item.id} response={item.response} />)}
-        {checking ? <div className="benzo-thinking" role="status"><img src="/benzo-happy.png" alt="" /><span>Benzo is checking the frozen records…</span></div> : null}
+        {checking ? <div className="benzo-thinking" role="status"><img src={ASSISTANT_IMAGE} alt="" /><span>Miss Minutes is checking the frozen records…</span></div> : null}
       </div>
 
       <form className="benzo-composer" onSubmit={(event) => void submitClaim(event)}>
@@ -232,13 +386,20 @@ export function BenzoAssistant() {
     <button
       type="button"
       className="benzo-launcher"
-      onClick={() => setOpen((current) => !current)}
+      onPointerDown={beginDrag}
+      onPointerMove={continueDrag}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onClick={() => {
+        if (suppressClickRef.current) return;
+        setOpen((current) => !current);
+      }}
       aria-expanded={open}
       aria-controls="benzo-assistant-panel"
-      aria-label={open ? "Close Benzo evidence assistant" : "Open Benzo evidence assistant"}
+      aria-label={open ? "Close Miss Minutes evidence assistant" : "Open Miss Minutes evidence assistant"}
     >
-      <span className="benzo-launcher__label">Ask Benzo</span>
-      <img src="/benzo-happy.png" alt="Benzo, the ProvenanceLab evidence assistant" />
+      <span className="benzo-launcher__label">Hi! How can I help? ✨</span>
+      <MissMinutesFigure />
     </button>
   </aside>;
 }

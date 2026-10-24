@@ -4,36 +4,42 @@ The accepted concept images are:
 
 - `docs/design/source-workspace-concept.png`
 - `docs/design/validation-results-concept.png`
+- `docs/design/prosion-inspired-validation-concept.png`
 
 ## Direction
 
-The product uses a scientific-editorial visual language: a true white workspace, deep navy typography, restrained teal actions, fine cool-slate rules, and molecular diagrams as the primary visual material. Amber is reserved for ambiguity, red for invalidity, green for verified results, and grey-blue for unavailable evidence.
+The product uses a scientific-editorial visual language inspired by contemporary biotech publishing: an ice-blue workspace, midnight typography, spectral cyan-to-magenta navigation accents, fine cool-slate rules, and molecular diagrams as the primary visual material. The language is original to ProvenanceLab and does not reuse third-party logos, artwork, copy, animation files, or commercial typefaces. Amber is reserved for ambiguity, rose for invalidity, green for verified results, and grey-blue for unavailable evidence.
 
 ## Typography
 
-- Display: Georgia, `Times New Roman`, serif.
-- Interface: Inter when available, followed by system sans-serif fallbacks.
-- Headings are compact and high contrast; control typography is deliberately 13–15px rather than browser defaults.
+- Display and interface: bundled `Manrope Variable`, followed by `Avenir Next`, `Segoe UI`, and system sans-serif fallbacks. Manrope is the redistributable visual substitute for the reference site's commercial Aeonik typeface.
+- Display headings use a light geometric weight, tight tracking, and editorial scale.
+- Data headings and controls use compact, deliberate weights rather than browser defaults.
 
 ## Tokens
 
 ```text
-background      #ffffff
-surface-muted   #f7fafc
-text            #0b1a33
-text-muted      #52627a
-border          #d8e1ea
-accent          #007f83
-accent-soft     #e8f7f7
-verified        #087f73
+background      #f2f6fa
+surface         #ffffff
+surface-muted   #f5faff
+text            #102539
+text-soft       #29435b
+text-muted      #71869a
+border          #d7e2ec
+border-strong   #bfcddb
+accent-cyan     #25cec4
+accent-blue     #2e9af5
+accent-violet   #966cf1
+accent-magenta  #ed48cc
+verified        #087b73
 ambiguous       #c66a00
-ambiguous-soft  #fff7e8
-invalid         #cf202f
-invalid-soft    #fff1f2
+ambiguous-soft  #fff0cf
+invalid         #c31f58
+invalid-soft    #ffe4f0
 unknown         #66758c
-radius-sm       6px
-radius-md       10px
-radius-lg       12px
+radius-sm       4px
+radius-md       6px
+radius-lg       8px
 ```
 
 ## Container model
@@ -42,7 +48,9 @@ radius-lg       12px
 - Slim left provenance progress rail on desktop.
 - Open two-column source/candidate workspace rather than a card grid.
 - Master-detail validation region followed by a full-width comparison table.
-- Borders provide structure; shadows are used sparingly.
+- Borders provide structure; shadows are used only for active or modal elevation.
+- The molecule canvas remains the primary visual focal point and atom labels are always visible.
+- Gradient accents are limited to brand geometry, active progress, selected underlines, and the primary footer action.
 
 ## Component inventory
 

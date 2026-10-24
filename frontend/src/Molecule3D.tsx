@@ -12,11 +12,11 @@ interface Props {
   smiles: string;
   label: string;
   autorotate: boolean;
-  showLabels: boolean;
   highlightedAtoms?: number[];
   resetSignal: number;
   zoom: number;
   compact?: boolean;
+  appearance?: "workspace" | "hero";
 }
 
 interface ProjectedPoint {
@@ -99,6 +99,7 @@ function drawBond(
   order: number,
   highlighted: boolean,
   atomScale: number,
+  heroPalette: boolean,
 ) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
@@ -117,6 +118,10 @@ function drawBond(
       gradient.addColorStop(0, "rgba(207, 32, 47, 0.65)");
       gradient.addColorStop(0.5, "rgba(232, 66, 81, 0.96)");
       gradient.addColorStop(1, "rgba(207, 32, 47, 0.65)");
+    } else if (heroPalette) {
+      gradient.addColorStop(0, "rgba(125, 225, 255, 0.78)");
+      gradient.addColorStop(0.5, "rgba(30, 166, 231, 0.98)");
+      gradient.addColorStop(1, "rgba(7, 79, 151, 0.82)");
     } else {
       gradient.addColorStop(0, "rgba(69, 96, 106, 0.58)");
       gradient.addColorStop(0.5, "rgba(31, 61, 70, 0.9)");
@@ -127,7 +132,11 @@ function drawBond(
     context.lineTo(x2, y2);
     context.lineWidth = (highlighted ? 5.5 : 4.2) * Math.max(0.68, atomScale);
     context.strokeStyle = gradient;
-    context.shadowColor = highlighted ? "rgba(207, 32, 47, 0.38)" : "rgba(0, 127, 131, 0.12)";
+    context.shadowColor = highlighted
+      ? "rgba(207, 32, 47, 0.38)"
+      : heroPalette
+        ? "rgba(13, 132, 205, 0.25)"
+        : "rgba(0, 127, 131, 0.12)";
     context.shadowBlur = highlighted ? 12 : 4;
     context.stroke();
     context.shadowBlur = 0;
@@ -143,8 +152,11 @@ function drawAtom(
   zoom: number,
   showLabel: boolean,
   time: number,
+  heroPalette: boolean,
 ) {
   const style = ELEMENT_STYLES[atom.element] ?? FALLBACK_ELEMENT_STYLE;
+  const heroCarbon = heroPalette && atom.element === "C";
+  const heroNitrogen = heroPalette && atom.element === "N";
   const radius = Math.max(4.5, style.radius * point.scale * zoom * atomScale);
   if (highlighted) {
     const pulse = 1 + Math.sin(time * 0.006) * 0.08;
@@ -167,23 +179,35 @@ function drawAtom(
     radius,
   );
   gradient.addColorStop(0, "#ffffff");
-  gradient.addColorStop(0.2, style.edge);
-  gradient.addColorStop(0.6, style.color);
-  gradient.addColorStop(1, style.shade);
+  gradient.addColorStop(0.2, heroCarbon ? "#8fe9ff" : heroNitrogen ? "#ffc7e9" : style.edge);
+  gradient.addColorStop(0.6, heroCarbon ? "#22aeea" : heroNitrogen ? "#ef55c6" : style.color);
+  gradient.addColorStop(1, heroCarbon ? "#075397" : heroNitrogen ? "#a90d79" : style.shade);
   context.beginPath();
   context.arc(point.x, point.y, radius, 0, Math.PI * 2);
   context.fillStyle = gradient;
-  context.shadowColor = highlighted ? "rgba(207, 32, 47, 0.42)" : "rgba(11, 45, 51, 0.2)";
+  context.shadowColor = highlighted
+    ? "rgba(207, 32, 47, 0.42)"
+    : heroCarbon
+      ? "rgba(12, 128, 199, 0.3)"
+      : heroNitrogen
+        ? "rgba(192, 22, 139, 0.28)"
+      : "rgba(11, 45, 51, 0.2)";
   context.shadowBlur = highlighted ? 16 : 9;
   context.fill();
   context.shadowBlur = 0;
-  context.strokeStyle = highlighted ? "rgba(207, 32, 47, 0.9)" : "rgba(255, 255, 255, 0.78)";
+  context.strokeStyle = highlighted
+    ? "rgba(207, 32, 47, 0.9)"
+    : heroCarbon
+      ? "rgba(5, 78, 145, 0.68)"
+      : heroNitrogen
+        ? "rgba(154, 13, 111, 0.7)"
+      : "rgba(255, 255, 255, 0.78)";
   context.lineWidth = 0.9;
   context.stroke();
 
   if (showLabel) {
-    context.fillStyle = atom.element === "H" ? "#23353c" : "#ffffff";
-    context.font = `800 ${Math.max(8, radius * 0.65)}px Inter, system-ui, sans-serif`;
+    context.fillStyle = heroCarbon || heroNitrogen || atom.element !== "H" ? "#ffffff" : "#23353c";
+    context.font = `800 ${Math.max(8, radius * 0.65)}px "Manrope Variable", system-ui, sans-serif`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.shadowColor = "rgba(0, 0, 0, 0.35)";
@@ -197,17 +221,17 @@ export default function Molecule3D({
   smiles,
   label,
   autorotate,
-  showLabels,
   highlightedAtoms = [],
   resetSignal,
   zoom,
   compact = false,
+  appearance = "workspace",
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<ViewState>({ ...DEFAULT_VIEW });
-  const renderPropsRef = useRef({ autorotate, showLabels, highlightedAtoms, zoom });
-  renderPropsRef.current = { autorotate, showLabels, highlightedAtoms, zoom };
+  const renderPropsRef = useRef({ autorotate, highlightedAtoms, zoom });
+  renderPropsRef.current = { autorotate, highlightedAtoms, zoom };
   const result = useMemo(() => parseSmilesSketch(smiles), [smiles]);
 
   useEffect(() => {
@@ -280,7 +304,7 @@ export default function Molecule3D({
       }
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, width, height);
-      drawBackground(context, width, height);
+      if (appearance !== "hero") drawBackground(context, width, height);
 
       const view = viewRef.current;
       const props = renderPropsRef.current;
@@ -313,6 +337,7 @@ export default function Molecule3D({
             item.order,
             highlighted.has(item.a) || highlighted.has(item.b),
             model.atomScale,
+            appearance === "hero",
           );
           return;
         }
@@ -325,8 +350,9 @@ export default function Molecule3D({
           isHighlighted,
           model.atomScale,
           totalZoom,
-          props.showLabels || atom.element !== "C" || isHighlighted,
+          true,
           time,
+          appearance === "hero",
         );
       });
 
@@ -334,7 +360,7 @@ export default function Molecule3D({
         model.valenceIssues.forEach((issue) => {
           const point = points[issue.atomIndex];
           const text = `${issue.element}${issue.atomIndex + 1} · ${issue.observed} bonds / expected ${issue.expected}`;
-          context.font = "800 10px Inter, system-ui, sans-serif";
+          context.font = '800 10px "Manrope Variable", system-ui, sans-serif';
           const labelWidth = Math.max(150, context.measureText(text).width + 22);
           const labelX = point.x + labelWidth + 28 < width ? point.x + 20 : point.x - labelWidth - 20;
           const labelY = Math.max(12, Math.min(height - 34, point.y - 34));
@@ -366,11 +392,11 @@ export default function Molecule3D({
       canvas.removeEventListener("pointercancel", endDrag);
       canvas.removeEventListener("wheel", onWheel);
     };
-  }, [compact, result.model]);
+  }, [appearance, compact, result.model]);
 
   if (result.error) {
     return (
-      <div className={`molecule-3d molecule-3d--fallback ${compact ? "molecule-3d--compact" : ""}`} role="img" aria-label={`${label} could not be rendered in 3D`}>
+      <div className={`molecule-3d molecule-3d--fallback molecule-3d--${appearance} ${compact ? "molecule-3d--compact" : ""}`} role="img" aria-label={`${label} could not be rendered in 3D`}>
         <strong>3D sketch unavailable</strong>
         <span>{result.error}</span>
       </div>
@@ -378,9 +404,9 @@ export default function Molecule3D({
   }
 
   return (
-    <div ref={hostRef} className={`molecule-3d ${compact ? "molecule-3d--compact" : ""}`}>
+    <div ref={hostRef} className={`molecule-3d molecule-3d--${appearance} ${compact ? "molecule-3d--compact" : ""}`}>
       <canvas ref={canvasRef} aria-label={`Interactive 3D SMILES sketch for ${label}`} />
-      {!compact ? <span className="molecule-3d__hint">Drag to rotate · scroll to zoom</span> : null}
+      {!compact && appearance !== "hero" ? <span className="molecule-3d__hint">Drag to rotate · scroll to zoom</span> : null}
     </div>
   );
 }
