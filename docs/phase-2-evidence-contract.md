@@ -1,0 +1,80 @@
+# ProvenanceLab Phase 2 evidence-assistant contract
+
+**Contract status:** initial implementation contract; scientific-review approval is pending.  
+**Scope:** typed claim decomposition, evidence packets, deterministic verdict validation, and
+research-aid output labelling.  
+**Non-goal in this increment:** live ChEMBL/PubChem ingestion, passage retrieval, Ollama calls,
+confidence calibration, and the 150-claim evaluation.
+
+## 1. Authority boundary
+
+The language model may decompose claims and propose a verdict. It is never the authority for
+citations, retraction exclusions, experimental-versus-computed evidence, entity resolution, or
+whether a decisive verdict is permitted. Those checks are deterministic.
+
+Every visible report must include exactly:
+
+> Research aid only. This report summarizes available evidence and is not a prediction of
+> clinical efficacy or safety.
+
+## 2. Verdict contract
+
+| Verdict | Deterministic minimum |
+|---|---|
+| `SUPPORTED` | Resolved entities, at least one supplied direct supporting citation, no deciding retracted citation, and experimental support for biological-activity claims. |
+| `CONTRADICTED` | Resolved entities and at least one supplied direct contradicting citation. Absence of support is not contradiction. Biological-activity contradiction requires experimental evidence. |
+| `INSUFFICIENT_EVIDENCE` | A stable reason code explaining the abstention, such as ambiguity, indirect evidence, computed-only evidence, retracted-only evidence, disagreement, or snapshot coverage. |
+| `OUT_OF_SCOPE` | A scope-policy reason code and no fabricated scientific citation. Clinical predictions, safety predictions, personalized advice, and unsupported future efficacy are out of scope. |
+
+For `SUPPORTED` and `CONTRADICTED`, citation IDs must exist in the exact evidence packet supplied
+to the model. A run record may support computed-property claims, but it cannot independently
+support or contradict biological activity.
+
+For `INSUFFICIENT_EVIDENCE`, citations may identify inspected or excluded records, but the reason
+code is authoritative. A no-evidence result must not fabricate a citation. For `OUT_OF_SCOPE`, the
+scope policy is the decision basis; a scientific citation is neither required nor permitted merely
+to satisfy a UI field.
+
+## 3. Retraction policy
+
+- `RETRACTED`: may be shown only as excluded context; cannot decide `SUPPORTED` or `CONTRADICTED`.
+- `EXPRESSION_OF_CONCERN`: may be considered but must emit a prominent warning and reduce the
+  later deterministic confidence calculation.
+- `CORRECTED`: requires downstream inspection of whether the correction affects the cited result.
+- `REINSTATED`: is not treated as retracted after the frozen record verifies reinstatement.
+- `UNKNOWN`: emits a warning and limits confidence.
+
+## 4. Initial disagreement policy
+
+The initial validator refuses `SUPPORTED` when the cited direct evidence includes a direct
+contradiction. The later assay-comparability engine may distinguish compatible from incompatible
+assays, but it must do so using typed dimensions such as molecule parent, target, organism,
+endpoint, assay type, units, relation operator, and experimental context. Until then, direct
+disagreement forces abstention rather than an LLM-selected winner.
+
+## 5. Confidence contract
+
+Confidence is `HIGH`, `MEDIUM`, or `LOW` and must be produced by a versioned deterministic
+calibration method. The model does not emit a percentage. Benchmark accuracy and case count are
+reported together only after they are measured on the frozen evaluation set.
+
+Planned factors are entity-match certainty, evidence directness, assay-target confidence, source
+independence, comparable-assay agreement, measurement flags, citation validity, retraction status,
+and retrieval margin.
+
+## 6. Reproducibility fields
+
+The final manifest records the pinned model name and digest, frozen evidence snapshot ID, input
+hash, configuration hash, and output hash. Evidence items carry a stable evidence ID, source record
+ID, snapshot ID, raw-record hash, source type, experimental/computed basis, directness, stance, and
+retraction status.
+
+## 7. Next implementation gate
+
+Before an API endpoint is exposed, the project must add:
+
+1. frozen snapshot metadata and SQLite migrations;
+2. molecule and target resolution with explicit ambiguity stops;
+3. an Ollama structured-output adapter pinned to the local Qwen digest;
+4. a deterministic confidence implementation backed by benchmark calibration; and
+5. integration tests proving that retrieved citations resolve to the frozen snapshot.
