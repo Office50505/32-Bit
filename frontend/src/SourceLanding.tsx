@@ -19,6 +19,16 @@ const DEFAULT_PREVIEW = {
   smiles: "CC(=O)Oc1ccccc1C(=O)O",
 };
 
+const FORMULA_TO_SMILES: Record<string, { name: string; smiles: string }> = {
+  H2O: { name: "water", smiles: "O" },
+  H2SO4: { name: "sulfuric acid", smiles: "OS(=O)(=O)O" },
+  O2: { name: "oxygen", smiles: "O=O" },
+  CO2: { name: "carbon dioxide", smiles: "O=C=O" },
+  H2O2: { name: "hydrogen peroxide", smiles: "OO" },
+  NH3: { name: "ammonia", smiles: "N" },
+  CH4: { name: "methane", smiles: "C" },
+};
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -40,6 +50,7 @@ export function SourceLanding({
   const previewZoom = Math.max(0.76, Math.min(1.28, 1.42 - Math.max(0, previewSmiles.length - 5) * 0.04));
   const hashPending = Boolean(file && !fileHash && !fileError);
   const canReview = Boolean(cleanSmiles && !hashPending);
+  const formulaSuggestion = FORMULA_TO_SMILES[cleanSmiles.toUpperCase()];
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,6 +81,13 @@ export function SourceLanding({
                 wrap="soft"
               />
             </label>
+
+            {formulaSuggestion ? <p className="source-formula-hint" role="status">
+              <span><strong>{cleanSmiles}</strong> is a molecular formula. Use the structural SMILES for {formulaSuggestion.name}:</span>
+              <button type="button" onClick={() => onSmilesChange(formulaSuggestion.smiles)}>
+                {formulaSuggestion.smiles}
+              </button>
+            </p> : null}
 
             <div className="source-hero__actions">
               <label

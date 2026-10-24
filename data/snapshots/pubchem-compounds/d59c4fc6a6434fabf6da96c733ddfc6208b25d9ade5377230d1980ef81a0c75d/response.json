@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 702,
+        "MolecularFormula": "C2H6O",
+        "MolecularWeight": "46.07",
+        "SMILES": "CCO",
+        "ConnectivitySMILES": "CCO",
+        "InChIKey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+        "IUPACName": "ethanol",
+        "XLogP": -0.1,
+        "ExactMass": "46.041864811",
+        "TPSA": 20.2,
+        "HBondDonorCount": 1,
+        "HBondAcceptorCount": 1,
+        "RotatableBondCount": 0,
+        "Title": "Ethanol"
+      }
+    ]
+  }
+}

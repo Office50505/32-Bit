@@ -811,6 +811,15 @@ class EvidenceStore:
             return False
         return row["content_sha256"] == self.content_sha256(snapshot_id)
 
+    def snapshot_exists(self, snapshot_id: str) -> bool:
+        return (
+            self._connection.execute(
+                "SELECT 1 FROM snapshots WHERE snapshot_id = ?",
+                (snapshot_id,),
+            ).fetchone()
+            is not None
+        )
+
     def verified_snapshot_hash(self, snapshot_id: str) -> str:
         row = self._connection.execute(
             "SELECT content_sha256 FROM snapshots WHERE snapshot_id = ?",

@@ -42,6 +42,7 @@ export function fromApi(result: AnalyzeResponse, inputIndex = 0): MoleculeCandid
     sourceFileSha256: result.source?.file_sha256, inputIndex,
     manifest: { analysisId: result.analysis_id, inputSha256: result.manifest.input_sha256,
       outputSha256: result.manifest.output_sha256, configurationSha256: result.manifest.configuration_sha256,
-      rdkitVersion: result.manifest.tool_versions.rdkit, snapshotId: result.manifest.snapshot_id },
+      rdkitVersion: result.manifest.tool_versions.rdkit, snapshotId: result.manifest.snapshot_id,
+      snapshotScope: result.manifest.snapshot_scope },
   };
 }

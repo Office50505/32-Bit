@@ -11,7 +11,7 @@ from app.core.chemistry_config import (
     DESCRIPTOR_CONFIGURATION,
     STANDARDIZATION_CONFIGURATION,
 )
-from app.core.provenance import create_manifest
+from app.core.provenance import configuration_payload, create_manifest
 from app.models.analysis import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -24,7 +24,11 @@ from app.models.analysis import (
     StandardizationStep,
     ValidationIssue,
 )
-from app.services.evidence import evidence_for
+from app.services.evidence import (
+    PropertyEvidenceResolution,
+    evidence_for,
+    resolve_property_evidence,
+)
 
 
 @dataclass(frozen=True)
@@ -484,7 +488,10 @@ def _comparison_status(
     )
 
 
-def _properties(mol: Chem.Mol, canonical_smiles: str) -> list[PropertyComparison]:
+def _properties(
+    mol: Chem.Mol,
+    evidence_resolution: PropertyEvidenceResolution,
+) -> list[PropertyComparison]:
     results: list[PropertyComparison] = []
     for spec in PROPERTY_SPECS:
         try:
@@ -504,7 +511,7 @@ def _properties(mol: Chem.Mol, canonical_smiles: str) -> list[PropertyComparison
                 reason_code="RDKIT_DESCRIPTOR_FAILURE",
                 reason=f"RDKit could not calculate this descriptor ({type(exc).__name__}).",
             )
-        evidence = evidence_for(canonical_smiles, spec.key, spec.unit)
+        evidence = evidence_for(evidence_resolution, spec.key, spec.unit)
         results.append(
             PropertyComparison(
                 key=spec.key,
@@ -581,6 +588,10 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         standardized_smiles = None
         steps: list[StandardizationStep] = []
         properties = _invalid_properties()
+        evidence_resolution = PropertyEvidenceResolution(
+            snapshot_id="not-applicable-invalid-structure",
+            snapshot_scope="No evidence lookup was attempted because the structure is invalid.",
+        )
     else:
         canonical_smiles = Chem.MolToSmiles(molecule, isomericSmiles=True)
         status = (
@@ -592,9 +603,16 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         if standardized_mol is None:
             standardized_smiles = None
             properties = _standardization_failure_properties()
+            evidence_resolution = PropertyEvidenceResolution(
+                snapshot_id="not-applicable-standardization-failed",
+                snapshot_scope=(
+                    "No evidence lookup was attempted because standardization failed."
+                ),
+            )
         else:
             standardized_smiles = Chem.MolToSmiles(standardized_mol, isomericSmiles=True)
-            properties = _properties(standardized_mol, standardized_smiles)
+            evidence_resolution = resolve_property_evidence(standardized_smiles)
+            properties = _properties(standardized_mol, evidence_resolution)
 
     response_payload = {
         "label": request.label or "Untitled molecule",
@@ -608,7 +626,13 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         "standardization_steps": [step.model_dump(mode="json") for step in steps],
         "properties": [prop.model_dump(mode="json") for prop in properties],
     }
-    manifest = create_manifest(request.model_dump(mode="json"), response_payload)
+    manifest = create_manifest(
+        request.model_dump(mode="json"),
+        response_payload,
+        configuration_payload(evidence_resolution.snapshot_id),
+        snapshot_id=evidence_resolution.snapshot_id,
+        snapshot_scope=evidence_resolution.snapshot_scope,
+    )
     return AnalyzeResponse(
         analysis_id=manifest.analysis_id,
         label=request.label or "Untitled molecule",

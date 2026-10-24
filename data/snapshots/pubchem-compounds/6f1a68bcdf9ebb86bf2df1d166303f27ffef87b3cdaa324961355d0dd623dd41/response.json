@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 1118,
+        "MolecularFormula": "H2O4S",
+        "MolecularWeight": "98.08",
+        "SMILES": "OS(=O)(=O)O",
+        "ConnectivitySMILES": "OS(=O)(=O)O",
+        "InChIKey": "QAOWNCQODCNURD-UHFFFAOYSA-N",
+        "IUPACName": "sulfuric acid",
+        "XLogP": -1.4,
+        "ExactMass": "97.96737971",
+        "TPSA": 83,
+        "HBondDonorCount": 2,
+        "HBondAcceptorCount": 4,
+        "RotatableBondCount": 0,
+        "Title": "Sulfuric Acid"
+      }
+    ]
+  }
+}

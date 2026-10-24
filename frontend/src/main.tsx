@@ -8,6 +8,7 @@ import App from "./App";
 import "./styles/global.css";
 import "./styles/refinement.css";
 import "./styles/benzo-assistant.css";
+import "./styles/evidence-states.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

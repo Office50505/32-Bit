@@ -7,6 +7,8 @@ from typing import Any
 
 from app.evidence.store import EvidenceStore
 from app.models.evidence_assistant import ClaimCheckRequest, ClaimCheckResponse
+from app.services.claim_routing import ClaimRoute, route_statement
+from app.services.dynamic_chembl import DynamicChemblError, DynamicChemblSnapshots
 from app.services.evidence_assistant import EvidenceAssistant
 from app.services.ollama import OllamaClient, OllamaConfig
 from app.services.pubchem_questions import (
@@ -22,6 +24,12 @@ _DEFAULT_DATABASE = (
 )
 _DEFAULT_MODEL_CONFIG = _PROJECT_ROOT / "backend/config/evidence/ollama-model.json"
 _DEFAULT_PUBCHEM_CACHE = _PROJECT_ROOT / "data/runtime/pubchem-compound-snapshots"
+_DEFAULT_BUNDLED_PUBCHEM = _PROJECT_ROOT / "data/snapshots/pubchem-compounds"
+_DEFAULT_DYNAMIC_DATABASE = _PROJECT_ROOT / "data/runtime/evidence/dynamic-chembl.sqlite"
+_DEFAULT_DYNAMIC_CHEMBL_RAW = _PROJECT_ROOT / "data/runtime/chembl-api-snapshots"
+_DEFAULT_RETRACTION_WATCH_CSV = (
+    _PROJECT_ROOT / "data/runtime/retraction-watch/retraction_watch.csv"
+)
 
 
 class EvidenceRuntimeError(RuntimeError):
@@ -33,6 +41,13 @@ def _required_string(payload: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value:
         raise EvidenceRuntimeError(f"Ollama configuration is missing {key}")
     return value
+
+
+def _environment_enabled(name: str, *, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.casefold().strip() not in {"0", "false", "no", "off"}
 
 
 def load_ollama_config(path: str | Path) -> OllamaConfig:
@@ -77,11 +92,35 @@ class EvidenceRuntime:
         self._pubchem_questions = PubChemQuestionAssistant(
             FrozenPubChemClient(
                 os.environ.get("PROVENANCELAB_PUBCHEM_CACHE", str(_DEFAULT_PUBCHEM_CACHE)),
+                fallback_directories=(
+                    os.environ.get(
+                        "PROVENANCELAB_PUBCHEM_BUNDLED_SNAPSHOTS",
+                        str(_DEFAULT_BUNDLED_PUBCHEM),
+                    ),
+                ),
                 base_url=os.environ.get(
                     "PROVENANCELAB_PUBCHEM_URL",
                     "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
                 ),
             )
+        )
+        self._dynamic_chembl = DynamicChemblSnapshots(
+            fixed_database_path=self.database_path,
+            combined_database_path=os.environ.get(
+                "PROVENANCELAB_DYNAMIC_EVIDENCE_DB",
+                str(_DEFAULT_DYNAMIC_DATABASE),
+            ),
+            raw_root=os.environ.get(
+                "PROVENANCELAB_CHEMBL_SNAPSHOT_CACHE",
+                str(_DEFAULT_DYNAMIC_CHEMBL_RAW),
+            ),
+            retraction_watch_csv=os.environ.get(
+                "PROVENANCELAB_RETRACTION_WATCH_CSV",
+                str(_DEFAULT_RETRACTION_WATCH_CSV),
+            ),
+            base_uri=os.environ.get("PROVENANCELAB_CHEMBL_URL", "").strip()
+            or "https://www.ebi.ac.uk/chembl/api/data",
+            enabled=_environment_enabled("PROVENANCELAB_DYNAMIC_CHEMBL", default=True),
         )
         self._lock = threading.Lock()
 
@@ -128,13 +167,36 @@ class EvidenceRuntime:
                 return pubchem_response
             if self._model is None:
                 self._model = OllamaClient(load_ollama_config(self.model_config_path))
-            with EvidenceStore.open_read_only(self.database_path) as store:
+            decomposition = self._model.decompose_claim(request).value
+            try:
+                dynamic_snapshot_ids = self._dynamic_chembl.ensure_for_decomposition(
+                    decomposition
+                )
+            except DynamicChemblError as error:
+                raise EvidenceRuntimeError(
+                    f"Dynamic ChEMBL evidence acquisition failed: {error}"
+                ) from error
+            evidence_database = (
+                self._dynamic_chembl.combined_database_path
+                if dynamic_snapshot_ids
+                else self.database_path
+            )
+            activity_only = all(
+                route_statement(statement).route == ClaimRoute.STRUCTURED_ASSAY
+                for statement in decomposition.statements
+            )
+            snapshot_ids = (
+                dynamic_snapshot_ids
+                if dynamic_snapshot_ids and activity_only
+                else (*self.snapshot_ids, *dynamic_snapshot_ids)
+            )
+            with EvidenceStore.open_read_only(evidence_database) as store:
                 assistant = EvidenceAssistant(
                     store=store,
-                    snapshot_ids=self.snapshot_ids,
+                    snapshot_ids=snapshot_ids,
                     model=self._model,
                 )
-                return assistant.check_claim(request)
+                return assistant.check_claim(request, decomposition=decomposition)
 
 
 @lru_cache(maxsize=1)

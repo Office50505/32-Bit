@@ -120,6 +120,47 @@ class FrozenRetractionIndex:
 
     @classmethod
     def from_csv(cls, path: str | Path) -> Self:
+        return cls._from_csv(path)
+
+    @classmethod
+    def from_csv_for_identifiers(
+        cls,
+        path: str | Path,
+        *,
+        dois: set[str],
+        pmids: set[str],
+    ) -> Self:
+        """Load only rows relevant to a frozen evidence acquisition.
+
+        The Retraction Watch export is large and updated daily. Dynamic evidence
+        snapshots still hash the complete frozen file, but retain only records
+        that can affect the papers present in the selected ChEMBL response.
+        """
+
+        normalized_dois = {
+            normalized
+            for value in dois
+            if (normalized := normalize_doi(value)) is not None
+        }
+        normalized_pmids = {
+            normalized
+            for value in pmids
+            if (normalized := normalize_pmid(value)) is not None
+        }
+        return cls._from_csv(
+            path,
+            selected_dois=normalized_dois,
+            selected_pmids=normalized_pmids,
+        )
+
+    @classmethod
+    def _from_csv(
+        cls,
+        path: str | Path,
+        *,
+        selected_dois: set[str] | None = None,
+        selected_pmids: set[str] | None = None,
+    ) -> Self:
         csv_path = Path(path).resolve()
         if not csv_path.is_file():
             raise EvidenceStoreError(f"Retraction Watch CSV does not exist: {csv_path}")
@@ -144,6 +185,9 @@ class FrozenRetractionIndex:
                 pmid = normalize_pmid(row.get("OriginalPaperPubMedID"))
                 if doi is None and pmid is None:
                     continue
+                if selected_dois is not None and selected_pmids is not None:
+                    if doi not in selected_dois and pmid not in selected_pmids:
+                        continue
                 records.append(
                     RetractionRecord(
                         record_id=record_id,

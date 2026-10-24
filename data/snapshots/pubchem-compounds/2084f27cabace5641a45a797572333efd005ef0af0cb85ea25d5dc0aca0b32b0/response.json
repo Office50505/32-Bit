@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 977,
+        "MolecularFormula": "O2",
+        "MolecularWeight": "31.999",
+        "SMILES": "O=O",
+        "ConnectivitySMILES": "O=O",
+        "InChIKey": "MYMOFIZGZYHOMD-UHFFFAOYSA-N",
+        "IUPACName": "molecular oxygen",
+        "XLogP": -1.1,
+        "ExactMass": "31.989829239",
+        "TPSA": 34.1,
+        "HBondDonorCount": 0,
+        "HBondAcceptorCount": 2,
+        "RotatableBondCount": 0,
+        "Title": "Oxygen"
+      }
+    ]
+  }
+}

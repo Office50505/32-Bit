@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 297,
+        "MolecularFormula": "CH4",
+        "MolecularWeight": "16.043",
+        "SMILES": "C",
+        "ConnectivitySMILES": "C",
+        "InChIKey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+        "IUPACName": "methane",
+        "XLogP": 0.6,
+        "ExactMass": "16.0313001276",
+        "TPSA": 0,
+        "HBondDonorCount": 0,
+        "HBondAcceptorCount": 0,
+        "RotatableBondCount": 0,
+        "Title": "Methane"
+      }
+    ]
+  }
+}

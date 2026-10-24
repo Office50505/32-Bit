@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 176,
+        "MolecularFormula": "C2H4O2",
+        "MolecularWeight": "60.05",
+        "SMILES": "CC(=O)O",
+        "ConnectivitySMILES": "CC(=O)O",
+        "InChIKey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
+        "IUPACName": "acetic acid",
+        "XLogP": -0.2,
+        "ExactMass": "60.021129366",
+        "TPSA": 37.3,
+        "HBondDonorCount": 1,
+        "HBondAcceptorCount": 2,
+        "RotatableBondCount": 0,
+        "Title": "Acetic Acid"
+      }
+    ]
+  }
+}

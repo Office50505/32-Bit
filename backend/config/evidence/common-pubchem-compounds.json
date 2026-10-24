@@ -1,0 +1,23 @@
+{
+  "schema_version": "provenancelab-pubchem-starter-v1",
+  "compounds": [
+    "water",
+    "oxygen",
+    "carbon dioxide",
+    "sulfuric acid",
+    "hydrogen peroxide",
+    "ammonia",
+    "methane",
+    "ethanol",
+    "acetic acid",
+    "formic acid",
+    "benzene",
+    "aspirin",
+    "caffeine",
+    "glucose",
+    "L-alanine",
+    "D-alanine",
+    "sodium chloride",
+    "imatinib"
+  ]
+}

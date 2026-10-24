@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 280,
+        "MolecularFormula": "CO2",
+        "MolecularWeight": "44.009",
+        "SMILES": "C(=O)=O",
+        "ConnectivitySMILES": "C(=O)=O",
+        "InChIKey": "CURLTUGMZLYLDI-UHFFFAOYSA-N",
+        "IUPACName": "carbon dioxide",
+        "XLogP": 0.9,
+        "ExactMass": "43.989829239",
+        "TPSA": 34.1,
+        "HBondDonorCount": 0,
+        "HBondAcceptorCount": 2,
+        "RotatableBondCount": 0,
+        "Title": "Carbon Dioxide"
+      }
+    ]
+  }
+}

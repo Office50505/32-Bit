@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 241,
+        "MolecularFormula": "C6H6",
+        "MolecularWeight": "78.11",
+        "SMILES": "C1=CC=CC=C1",
+        "ConnectivitySMILES": "C1=CC=CC=C1",
+        "InChIKey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
+        "IUPACName": "benzene",
+        "XLogP": 2.1,
+        "ExactMass": "78.0469501914",
+        "TPSA": 0,
+        "HBondDonorCount": 0,
+        "HBondAcceptorCount": 0,
+        "RotatableBondCount": 0,
+        "Title": "Benzene"
+      }
+    ]
+  }
+}

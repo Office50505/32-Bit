@@ -229,10 +229,17 @@ class EntityResolver:
         resolved_rows: dict[str, sqlite3.Row] = {}
         reasons: list[str] = []
         for mention in mentions:
+            alias, organism_hint = _target_alias_and_organism(mention)
             matches: dict[str, sqlite3.Row] = {}
             for snapshot_id in self._snapshot_ids:
-                for row in self._store.resolve_target_alias(snapshot_id, mention):
+                for row in self._store.resolve_target_alias(snapshot_id, alias):
                     matches[row["target_id"]] = row
+            if organism_hint is not None:
+                matches = {
+                    target_id: row
+                    for target_id, row in matches.items()
+                    if row["organism"] == organism_hint
+                }
             if not matches:
                 reasons.append(f"UNRESOLVED_TARGET:{mention}")
             elif len(matches) > 1:
@@ -243,6 +250,19 @@ class EntityResolver:
         if len(resolved) > 1:
             reasons.append("MULTIPLE_TARGETS_IN_STATEMENT")
         return resolved, resolved_rows, reasons
+
+
+def _target_alias_and_organism(mention: str) -> tuple[str, str | None]:
+    normalized = " ".join(mention.strip().split())
+    casefolded = normalized.casefold()
+    for prefix, organism in (
+        ("human ", "Homo sapiens"),
+        ("mouse ", "Mus musculus"),
+        ("rat ", "Rattus norvegicus"),
+    ):
+        if casefolded.startswith(prefix):
+            return normalized[len(prefix) :].strip(), organism
+    return normalized, None
 
 
 def duplicate_statement_pairs(decomposition: ClaimDecomposition) -> list[tuple[str, str]]:

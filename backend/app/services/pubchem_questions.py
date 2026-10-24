@@ -35,8 +35,9 @@ from app.services.verdict_engine import materialize_statement_verdict
 
 PUBCHEM_QUESTION_PIPELINE_VERSION = "pubchem-question-snapshot-v1"
 PUBCHEM_PROPERTY_FIELDS = (
-    "Title,IUPACName,CanonicalSMILES,IsomericSMILES,InChIKey,"
-    "MolecularFormula,MolecularWeight"
+    "Title,IUPACName,ConnectivitySMILES,SMILES,InChIKey,MolecularFormula,"
+    "MolecularWeight,ExactMass,XLogP,TPSA,HBondDonorCount,"
+    "HBondAcceptorCount,RotatableBondCount"
 )
 FetchTransport = Callable[[str, float], bytes]
 
@@ -47,7 +48,18 @@ class PubChemQuestionError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class ParsedMoleculeQuestion:
-    kind: Literal["compare", "describe", "formula", "weight"]
+    kind: Literal[
+        "compare",
+        "describe",
+        "formula",
+        "weight",
+        "exact_mass",
+        "logp",
+        "tpsa",
+        "hbd",
+        "hba",
+        "rotatable_bonds",
+    ]
     names: tuple[str, ...]
 
 
@@ -62,6 +74,12 @@ class FrozenPubChemCompound:
     inchikey: str
     molecular_formula: str | None
     molecular_weight: str | None
+    exact_mass: str | None
+    xlogp: float | None
+    tpsa: float | None
+    hbond_donor_count: int | None
+    hbond_acceptor_count: int | None
+    rotatable_bond_count: int | None
     source_url: str
     retrieved_at: str
     raw_sha256: str
@@ -140,20 +158,38 @@ def parse_molecule_question(question: str) -> ParsedMoleculeQuestion | None:
             return ParsedMoleculeQuestion(kind="compare", names=names)
 
     property_question = re.fullmatch(
-        r"(?:what\s+is\s+the\s+)?(molecular\s+formula|molecular\s+(?:weight|mass))\s+of\s+(.+)",
+        r"(?:what\s+is\s+the\s+)?(molecular\s+formula|molecular\s+weight|"
+        r"exact\s+mass|logp|topological\s+polar\s+surface\s+area|tpsa|"
+        r"hydrogen[- ]bond\s+donors?|hydrogen[- ]bond\s+acceptors?|"
+        r"rotatable\s+bonds?)\s+of\s+(.+)",
         text,
         re.IGNORECASE,
     )
     if property_question:
-        kind: Literal["formula", "weight"] = (
-            "formula" if "formula" in property_question.group(1).casefold() else "weight"
-        )
+        property_name = property_question.group(1).casefold()
+        if "formula" in property_name:
+            kind = "formula"
+        elif "weight" in property_name:
+            kind = "weight"
+        elif "exact" in property_name:
+            kind = "exact_mass"
+        elif property_name == "logp":
+            kind = "logp"
+        elif "surface" in property_name or property_name == "tpsa":
+            kind = "tpsa"
+        elif "donor" in property_name:
+            kind = "hbd"
+        elif "acceptor" in property_name:
+            kind = "hba"
+        else:
+            kind = "rotatable_bonds"
         name = _trim_question(property_question.group(2))
         if 1 < len(name) <= 120:
             return ParsedMoleculeQuestion(kind=kind, names=(name,))
 
     description = re.fullmatch(
-        r"(?:what\s+is|tell\s+me\s+about)\s+([A-Za-z0-9][A-Za-z0-9 +(),.'-]{0,119})",
+        r"(?:what\s+is|tell\s+me\s+about|describe|give\s+me\s+(?:facts|information)\s+about)"
+        r"\s+([A-Za-z0-9][A-Za-z0-9 +(),.'-]{0,119})",
         text,
         re.IGNORECASE,
     )
@@ -170,11 +206,15 @@ class FrozenPubChemClient:
         self,
         cache_directory: str | Path,
         *,
+        fallback_directories: tuple[str | Path, ...] = (),
         base_url: str = "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
         timeout_seconds: float = 30.0,
         transport: FetchTransport | None = None,
     ) -> None:
         self.cache_directory = Path(cache_directory).resolve()
+        self.fallback_directories = tuple(
+            Path(directory).resolve() for directory in fallback_directories
+        )
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self._transport = transport or self._fetch
@@ -192,41 +232,113 @@ class FrozenPubChemClient:
             raise PubChemQuestionError("PubChem compound acquisition failed") from error
 
     def get(self, name: str) -> FrozenPubChemCompound:
-        normalized = name.casefold().strip()
-        cache_key = _sha256({"query": normalized, "fields": PUBCHEM_PROPERTY_FIELDS})
-        record_directory = self.cache_directory / cache_key
-        raw_path = record_directory / "response.json"
-        manifest_path = record_directory / "manifest.json"
-        if raw_path.is_file() and manifest_path.is_file():
-            raw = raw_path.read_bytes()
-            try:
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as error:
-                raise PubChemQuestionError("cached PubChem manifest is invalid") from error
-            if manifest.get("raw_sha256") != _sha256(raw):
-                raise PubChemQuestionError("cached PubChem response failed checksum verification")
-            return self._parse(raw, name=name, manifest=manifest)
+        return self._get("name", name)
 
-        encoded_name = urllib.parse.quote(name, safe="")
+    def get_by_inchikey(self, inchikey: str) -> FrozenPubChemCompound:
+        return self._get("inchikey", inchikey.upper().strip())
+
+    def _get(
+        self,
+        namespace: Literal["name", "inchikey"],
+        identifier: str,
+    ) -> FrozenPubChemCompound:
+        normalized = identifier.casefold().strip()
+        cache_key = _sha256(
+            {
+                "namespace": namespace,
+                "query": normalized,
+                "fields": PUBCHEM_PROPERTY_FIELDS,
+            }
+        )
+        record_directory = self.cache_directory / cache_key
+        cached = self._read_cached(record_directory, identifier=identifier)
+        if cached is not None:
+            return cached
+        for directory in (self.cache_directory, *self.fallback_directories):
+            matching = self._find_matching_record(
+                directory,
+                namespace=namespace,
+                identifier=identifier,
+            )
+            if matching is not None:
+                return matching
+
+        encoded_identifier = urllib.parse.quote(identifier, safe="")
         url = (
-            f"{self.base_url}/compound/name/{encoded_name}/property/"
+            f"{self.base_url}/compound/{namespace}/{encoded_identifier}/property/"
             f"{PUBCHEM_PROPERTY_FIELDS}/JSON"
         )
         raw = self._transport(url, self.timeout_seconds)
         retrieved_at = datetime.now(UTC).replace(microsecond=0).isoformat()
         preliminary = {
-            "query": name,
+            "namespace": namespace,
+            "query": identifier,
             "normalized_query": normalized,
+            "property_fields": PUBCHEM_PROPERTY_FIELDS,
             "source_url": url,
             "retrieved_at": retrieved_at,
             "raw_sha256": _sha256(raw),
         }
-        record = self._parse(raw, name=name, manifest=preliminary)
-        manifest = {**preliminary, "cid": record.cid, "title": record.title}
+        record = self._parse(raw, name=identifier, manifest=preliminary)
+        manifest = {
+            **preliminary,
+            "cid": record.cid,
+            "title": record.title,
+            "inchikey": record.inchikey,
+        }
         record_directory.mkdir(parents=True, exist_ok=False)
-        self._write_atomic(raw_path, raw)
-        self._write_atomic(manifest_path, (_canonical_json(manifest) + "\n").encode("utf-8"))
+        self._write_atomic(record_directory / "response.json", raw)
+        self._write_atomic(
+            record_directory / "manifest.json",
+            (_canonical_json(manifest) + "\n").encode("utf-8"),
+        )
         return record
+
+    def _read_cached(
+        self,
+        record_directory: Path,
+        *,
+        identifier: str,
+    ) -> FrozenPubChemCompound | None:
+        raw_path = record_directory / "response.json"
+        manifest_path = record_directory / "manifest.json"
+        if not raw_path.is_file() or not manifest_path.is_file():
+            return None
+        raw = raw_path.read_bytes()
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise PubChemQuestionError("cached PubChem manifest is invalid") from error
+        if manifest.get("raw_sha256") != _sha256(raw):
+            raise PubChemQuestionError("cached PubChem response failed checksum verification")
+        return self._parse(raw, name=identifier, manifest=manifest)
+
+    def _find_matching_record(
+        self,
+        directory: Path,
+        *,
+        namespace: Literal["name", "inchikey"],
+        identifier: str,
+    ) -> FrozenPubChemCompound | None:
+        if not directory.is_dir():
+            return None
+        normalized = identifier.casefold().strip()
+        for manifest_path in directory.glob("*/manifest.json"):
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if manifest.get("property_fields") != PUBCHEM_PROPERTY_FIELDS:
+                continue
+            matches = (
+                str(manifest.get("inchikey", "")).upper() == identifier.upper()
+                if namespace == "inchikey"
+                else manifest.get("normalized_query") == normalized
+            )
+            if not matches:
+                continue
+            return self._read_cached(manifest_path.parent, identifier=identifier)
+        return None
 
     @staticmethod
     def _write_atomic(path: Path, payload: bytes) -> None:
@@ -275,6 +387,24 @@ class FrozenPubChemClient:
             inchikey=inchikey,
             molecular_formula=item.get("MolecularFormula"),
             molecular_weight=item.get("MolecularWeight"),
+            exact_mass=item.get("ExactMass"),
+            xlogp=float(item["XLogP"]) if item.get("XLogP") is not None else None,
+            tpsa=float(item["TPSA"]) if item.get("TPSA") is not None else None,
+            hbond_donor_count=(
+                int(item["HBondDonorCount"])
+                if item.get("HBondDonorCount") is not None
+                else None
+            ),
+            hbond_acceptor_count=(
+                int(item["HBondAcceptorCount"])
+                if item.get("HBondAcceptorCount") is not None
+                else None
+            ),
+            rotatable_bond_count=(
+                int(item["RotatableBondCount"])
+                if item.get("RotatableBondCount") is not None
+                else None
+            ),
             source_url=str(manifest["source_url"]),
             retrieved_at=str(manifest["retrieved_at"]),
             raw_sha256=str(manifest["raw_sha256"]),
@@ -356,6 +486,12 @@ class PubChemQuestionAssistant:
                 "iupac_name": record.iupac_name,
                 "molecular_formula": record.molecular_formula,
                 "molecular_weight": record.molecular_weight,
+                "exact_mass": record.exact_mass,
+                "xlogp": record.xlogp,
+                "tpsa": record.tpsa,
+                "hbond_donor_count": record.hbond_donor_count,
+                "hbond_acceptor_count": record.hbond_acceptor_count,
+                "rotatable_bond_count": record.rotatable_bond_count,
                 "connectivity_smiles": record.connectivity_smiles,
                 "isomeric_smiles": record.isomeric_smiles,
                 "source_url": record.source_url,
@@ -369,7 +505,18 @@ class PubChemQuestionAssistant:
 
     @staticmethod
     def _answer(
-        kind: Literal["compare", "describe", "formula", "weight"],
+        kind: Literal[
+            "compare",
+            "describe",
+            "formula",
+            "weight",
+            "exact_mass",
+            "logp",
+            "tpsa",
+            "hbd",
+            "hba",
+            "rotatable_bonds",
+        ],
         records: tuple[FrozenPubChemCompound, ...],
     ) -> str:
         first = records[0]
@@ -383,6 +530,20 @@ class PubChemQuestionAssistant:
                 f"PubChem records {first.title}'s molecular weight as "
                 f"{first.molecular_weight} g/mol."
             )
+        property_answers = {
+            "exact_mass": ("exact mass", first.exact_mass, "Da"),
+            "logp": ("XLogP", first.xlogp, ""),
+            "tpsa": ("topological polar surface area", first.tpsa, "A^2"),
+            "hbd": ("hydrogen-bond donor count", first.hbond_donor_count, ""),
+            "hba": ("hydrogen-bond acceptor count", first.hbond_acceptor_count, ""),
+            "rotatable_bonds": ("rotatable-bond count", first.rotatable_bond_count, ""),
+        }
+        if kind in property_answers:
+            label, value, unit = property_answers[kind]
+            if value is None:
+                return f"The frozen PubChem record for {first.title} does not report {label}."
+            suffix = f" {unit}" if unit else ""
+            return f"PubChem records {first.title}'s {label} as {value}{suffix}."
         if kind == "describe":
             return (
                 f"PubChem identifies {first.title} (CID {first.cid}) as "

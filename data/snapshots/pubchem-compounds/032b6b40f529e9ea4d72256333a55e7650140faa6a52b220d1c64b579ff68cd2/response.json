@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 222,
+        "MolecularFormula": "H3N",
+        "MolecularWeight": "17.031",
+        "SMILES": "N",
+        "ConnectivitySMILES": "N",
+        "InChIKey": "QGZKDVFQNNGYKY-UHFFFAOYSA-N",
+        "IUPACName": "azane",
+        "XLogP": -0.7,
+        "ExactMass": "17.026549100",
+        "TPSA": 1,
+        "HBondDonorCount": 1,
+        "HBondAcceptorCount": 1,
+        "RotatableBondCount": 0,
+        "Title": "Ammonia"
+      }
+    ]
+  }
+}

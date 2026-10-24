@@ -73,6 +73,9 @@ def create_manifest(
     input_payload: dict[str, Any],
     output_payload: dict[str, Any],
     configuration: dict[str, Any] | None = None,
+    *,
+    snapshot_id: str = SNAPSHOT_ID,
+    snapshot_scope: str = SNAPSHOT_SCOPE,
 ) -> RunManifest:
     input_hash = sha256_text(canonical_json(input_payload))
     configuration_hash = configuration_sha256(configuration)
@@ -83,7 +86,7 @@ def create_manifest(
         input_sha256=input_hash,
         configuration_sha256=configuration_hash,
         output_sha256=output_hash,
-        snapshot_id=SNAPSHOT_ID,
-        snapshot_scope=SNAPSHOT_SCOPE,
+        snapshot_id=snapshot_id,
+        snapshot_scope=snapshot_scope,
         tool_versions=tool_versions(),
     )

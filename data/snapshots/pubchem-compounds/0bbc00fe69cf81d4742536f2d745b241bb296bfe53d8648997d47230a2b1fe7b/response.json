@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 5950,
+        "MolecularFormula": "C3H7NO2",
+        "MolecularWeight": "89.09",
+        "SMILES": "C[C@@H](C(=O)O)N",
+        "ConnectivitySMILES": "CC(C(=O)O)N",
+        "InChIKey": "QNAYBMKLOCPYGJ-REOHCLBHSA-N",
+        "IUPACName": "(2S)-2-aminopropanoic acid",
+        "XLogP": -3,
+        "ExactMass": "89.047678466",
+        "TPSA": 63.3,
+        "HBondDonorCount": 2,
+        "HBondAcceptorCount": 3,
+        "RotatableBondCount": 1,
+        "Title": "L-Alanine"
+      }
+    ]
+  }
+}

@@ -26,6 +26,8 @@ const VERDICT_LABELS: Record<EvidenceVerdict, string> = {
 const SUGGESTIONS = [
   "Imatinib inhibits ABL1.",
   "What is the difference between L-alanine and D-alanine?",
+  "What is the molecular formula of sulfuric acid?",
+  "Give me facts about aspirin",
 ];
 
 const ASSISTANT_IMAGE = "/miss-minutes-assistant.png";
@@ -338,7 +340,7 @@ export function BenzoAssistant() {
       <div className="benzo-feed" aria-live="polite">
         <div className="benzo-intro">
           <span className="benzo-intro__icon"><FlaskConical size={17} /></span>
-          <div><strong>I check claims, not predict outcomes.</strong><p>The assay pilot covers imatinib and ABL1. For molecule identity and structure questions, I can freeze cited PubChem records on demand.</p></div>
+          <div><strong>I check claims, not predict outcomes.</strong><p>New compounds are frozen from PubChem on demand. Activity questions resolve the molecule and target, then freeze matching ChEMBL assays and their paper records before I answer.</p></div>
         </div>
         {!items.length ? <div className="benzo-suggestions">
           <span>Try a claim</span>
@@ -355,7 +357,7 @@ export function BenzoAssistant() {
           : item.role === "error"
             ? <div key={item.id} className="benzo-message benzo-message--error"><strong>Couldn’t check that claim</strong><span>{item.text}</span></div>
             : <AssistantResponse key={item.id} response={item.response} />)}
-        {checking ? <div className="benzo-thinking" role="status"><img src={ASSISTANT_IMAGE} alt="" /><span>Miss Minutes is checking the frozen records…</span></div> : null}
+        {checking ? <div className="benzo-thinking" role="status"><img src={ASSISTANT_IMAGE} alt="" /><span>Resolving records and creating a frozen evidence snapshot…</span></div> : null}
       </div>
 
       <form className="benzo-composer" onSubmit={(event) => void submitClaim(event)}>

@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 284,
+        "MolecularFormula": "CH2O2",
+        "MolecularWeight": "46.025",
+        "SMILES": "C(=O)O",
+        "ConnectivitySMILES": "C(=O)O",
+        "InChIKey": "BDAGIHXWWSANSR-UHFFFAOYSA-N",
+        "IUPACName": "formic acid",
+        "XLogP": -0.2,
+        "ExactMass": "46.005479302",
+        "TPSA": 37.3,
+        "HBondDonorCount": 1,
+        "HBondAcceptorCount": 2,
+        "RotatableBondCount": 0,
+        "Title": "Formic Acid"
+      }
+    ]
+  }
+}

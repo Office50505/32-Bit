@@ -3,6 +3,8 @@ import { EvidenceStatusBadge } from "./StatusBadge";
 
 export function CompareTable({ molecules, brief = false }: { molecules: MoleculeCandidate[]; brief?: boolean }) {
   const comparable = molecules.filter((molecule) => molecule.status !== "invalid");
+  const snapshotId = comparable[0]?.manifest.snapshotId;
+  const hasFrozenSnapshot = snapshotId?.startsWith("pubchem-pug-cid-") ?? false;
   const rows = (comparable[0]?.descriptors ?? []).filter((descriptor) =>
     !brief || ["molecular_formula", "molecular_weight", "exact_mass", "logp"].includes(descriptor.key),
   );
@@ -13,8 +15,8 @@ export function CompareTable({ molecules, brief = false }: { molecules: Molecule
         <h2 className="font-serif text-[17px] font-bold text-slate-800">Auditable property comparison</h2>
         <p className="mt-1 text-[11px] leading-relaxed text-slate-500">Computed results and reference evidence remain separate for each molecule.</p>
       </div>
-      <span className="rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-800">
-        Frozen reference snapshot: {comparable[0]?.manifest.snapshotId ?? "not configured"}
+      <span className={`reference-snapshot-chip ${hasFrozenSnapshot ? "reference-snapshot-chip--ready" : ""}`}>
+        {hasFrozenSnapshot ? "Frozen PubChem reference" : "Reference snapshot"}: {snapshotId ?? "not applicable"}
       </span>
     </div>
     <div className="table-scroll">
@@ -50,8 +52,8 @@ export function CompareTable({ molecules, brief = false }: { molecules: Molecule
         </tr>)}</tbody>
       </table>
     </div>
-    {molecules.some((molecule) => molecule.status === "invalid") && <p className="text-[11px] text-rose-700">
-      Invalid structures are excluded from numerical comparison. Their descriptors remain “Not computed.”
-    </p>}
+    {molecules.some((molecule) => molecule.status === "invalid") ? <p className="calculation-blocker">
+      <strong>Why values are not computed:</strong> invalid structures are excluded from descriptor calculation. Correct the highlighted atom or bond, then rerun the analysis.
+    </p> : null}
   </div>;
 }

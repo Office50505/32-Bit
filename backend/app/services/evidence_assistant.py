@@ -197,8 +197,15 @@ class EvidenceAssistant:
             }
         )
 
-    def check_claim(self, request: ClaimCheckRequest) -> ClaimCheckResponse:
-        decomposition = _deduplicate(self._model.decompose_claim(request).value)
+    def check_claim(
+        self,
+        request: ClaimCheckRequest,
+        *,
+        decomposition: ClaimDecomposition | None = None,
+    ) -> ClaimCheckResponse:
+        decomposition = _deduplicate(
+            decomposition or self._model.decompose_claim(request).value
+        )
         verdicts = []
         run_record_ids = tuple(request.run_record_ids)
         for statement in decomposition.statements:

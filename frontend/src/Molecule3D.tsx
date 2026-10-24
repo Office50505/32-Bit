@@ -359,7 +359,7 @@ export default function Molecule3D({
       if (!compact && width > 520 && model.valenceIssues.length) {
         model.valenceIssues.forEach((issue) => {
           const point = points[issue.atomIndex];
-          const text = `${issue.element}${issue.atomIndex + 1} · ${issue.observed} bonds / expected ${issue.expected}`;
+          const text = `${issue.element}${issue.atomIndex + 1} · ${issue.bondCount} bonds · bond-order sum ${issue.observed} / expected ${issue.expected}`;
           context.font = '800 10px "Manrope Variable", system-ui, sans-serif';
           const labelWidth = Math.max(150, context.measureText(text).width + 22);
           const labelX = point.x + labelWidth + 28 < width ? point.x + 20 : point.x - labelWidth - 20;

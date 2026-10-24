@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 5793,
+        "MolecularFormula": "C6H12O6",
+        "MolecularWeight": "180.16",
+        "SMILES": "C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O",
+        "ConnectivitySMILES": "C(C1C(C(C(C(O1)O)O)O)O)O",
+        "InChIKey": "WQZGKKKJIJFFOK-GASJEMHNSA-N",
+        "IUPACName": "(3R,4S,5S,6R)-6-(hydroxymethyl)oxane-2,3,4,5-tetrol",
+        "XLogP": -2.6,
+        "ExactMass": "180.06338810",
+        "TPSA": 110,
+        "HBondDonorCount": 5,
+        "HBondAcceptorCount": 6,
+        "RotatableBondCount": 1,
+        "Title": "D-Glucose"
+      }
+    ]
+  }
+}

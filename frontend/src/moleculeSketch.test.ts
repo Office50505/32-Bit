@@ -29,6 +29,28 @@ describe("parseSmilesSketch", () => {
     ]);
   });
 
+  it("does not confuse two single bonds in COO with a valence of three", () => {
+    const result = parseSmilesSketch("COO");
+
+    expect(result.error).toBeUndefined();
+    expect(result.model?.bonds).toHaveLength(2);
+    expect(result.model?.valenceIssues).toEqual([]);
+  });
+
+  it("reports bond count separately from bond-order sum", () => {
+    const result = parseSmilesSketch("CO=O");
+
+    expect(result.model?.valenceIssues).toEqual([
+      expect.objectContaining({
+        atomIndex: 1,
+        element: "O",
+        bondCount: 2,
+        observed: 3,
+        expected: 2,
+      }),
+    ]);
+  });
+
   it("returns a useful error for an unclosed branch", () => {
     const result = parseSmilesSketch("CC(O");
 

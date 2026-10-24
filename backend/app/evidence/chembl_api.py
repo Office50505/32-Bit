@@ -96,6 +96,12 @@ class ChemblApiImportStats:
     activities: int
 
 
+@dataclass(frozen=True, slots=True)
+class ChemblDocumentIdentifiers:
+    dois: frozenset[str]
+    pmids: frozenset[str]
+
+
 def _sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -449,6 +455,21 @@ def inspect_frozen_chembl_api_snapshot(
         retrieved_at=retrieved_at,
         response_count=len(responses),
         source_sha256=str(manifest["source_sha256"]),
+    )
+
+
+def frozen_chembl_document_identifiers(
+    raw_directory: str | Path,
+) -> ChemblDocumentIdentifiers:
+    """Return source-paper identifiers after verifying every frozen response."""
+
+    _, grouped = _load_frozen_responses(raw_directory)
+    documents = _records(grouped, "document")
+    return ChemblDocumentIdentifiers(
+        dois=frozenset(str(row["doi"]) for row in documents if row.get("doi")),
+        pmids=frozenset(
+            str(row["pubmed_id"]) for row in documents if row.get("pubmed_id") is not None
+        ),
     )
 
 

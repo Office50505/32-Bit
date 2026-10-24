@@ -32,6 +32,12 @@ def pubchem_payload(name: str) -> bytes:
                         ),
                         "MolecularFormula": "C3H7NO2",
                         "MolecularWeight": "89.09",
+                        "ExactMass": "89.047678",
+                        "XLogP": -2.8,
+                        "TPSA": 63.3,
+                        "HBondDonorCount": 2,
+                        "HBondAcceptorCount": 3,
+                        "RotatableBondCount": 1,
                     }
                 ]
             }
@@ -86,3 +92,15 @@ def test_non_molecule_chat_falls_through_without_an_api_call(tmp_path: Path) -> 
         FrozenPubChemClient(tmp_path, transport=unexpected_transport)
     )
     assert assistant.try_check(ClaimCheckRequest(claim="hey")) is None
+
+
+def test_parser_routes_additional_pubchem_property_questions() -> None:
+    parsed = parse_molecule_question("What is the exact mass of aspirin?")
+    assert parsed is not None
+    assert parsed.kind == "exact_mass"
+    assert parsed.names == ("aspirin",)
+
+    described = parse_molecule_question("Give me facts about caffeine")
+    assert described is not None
+    assert described.kind == "describe"
+    assert described.names == ("caffeine",)

@@ -1,0 +1,22 @@
+{
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 962,
+        "MolecularFormula": "H2O",
+        "MolecularWeight": "18.015",
+        "SMILES": "O",
+        "ConnectivitySMILES": "O",
+        "InChIKey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+        "IUPACName": "oxidane",
+        "XLogP": -0.5,
+        "ExactMass": "18.010564683",
+        "TPSA": 1,
+        "HBondDonorCount": 1,
+        "HBondAcceptorCount": 1,
+        "RotatableBondCount": 0,
+        "Title": "Water"
+      }
+    ]
+  }
+}

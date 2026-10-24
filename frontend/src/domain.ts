@@ -39,6 +39,7 @@ export interface ProvenanceManifest {
   configurationSha256: string;
   rdkitVersion: string;
   snapshotId: string;
+  snapshotScope: string;
 }
 
 export interface MoleculeCandidate {

@@ -20,6 +20,7 @@ export interface SketchBond {
 export interface ValenceIssue {
   atomIndex: number;
   element: string;
+  bondCount: number;
   observed: number;
   expected: number;
   sourceToken: string;
@@ -287,9 +288,12 @@ export function parseSmilesSketch(rawSmiles: string): SketchResult {
   const positions = layoutAtoms(atoms, bonds);
   atoms.forEach((item, index) => Object.assign(item, positions[index]));
   const bondLoad = new Array<number>(atoms.length).fill(0);
+  const bondCount = new Array<number>(atoms.length).fill(0);
   bonds.forEach((item) => {
     bondLoad[item.a] += item.order;
     bondLoad[item.b] += item.order;
+    bondCount[item.a] += 1;
+    bondCount[item.b] += 1;
   });
   const valenceIssues: ValenceIssue[] = [];
   atoms.forEach((item, atomIndex) => {
@@ -300,6 +304,7 @@ export function parseSmilesSketch(rawSmiles: string): SketchResult {
       valenceIssues.push({
         atomIndex,
         element: item.element,
+        bondCount: bondCount[atomIndex],
         observed: bondLoad[atomIndex],
         expected: allowed,
         sourceToken: item.sourceToken,
