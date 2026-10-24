@@ -98,6 +98,13 @@ The example selection is intentionally a one-molecule smoke test, not the final 
 The reviewed pilot manifest must expand it only after the claim set defines the required molecules,
 targets, organisms, and endpoints.
 
+The Ollama adapter always validates model output against strict Pydantic contracts and assigns
+structural statement IDs (`S1`, `S2`, ...) deterministically. Its preferred mode sends JSON Schema
+through Ollama's `format` parameter. The currently pinned Qwen/Ollama combination stalls on nested
+array schemas, so its checked-in local configuration explicitly selects Ollama JSON mode and embeds
+the same schema in the prompt. This compatibility mode remains fail-closed on validation errors and
+must be recorded in run provenance; it is not to be described as schema-constrained generation.
+
 Each snapshot records the source version and source hash. Sealing computes a deterministic digest
 over canonical snapshot metadata and every normalized source row. FTS rows are derived search data
 and are therefore excluded from that content digest. A sealed snapshot rejects further builder
@@ -109,6 +116,6 @@ Before an API endpoint is exposed, the project must add:
 
 1. selected PubChem/PMC import adapters that preserve raw records;
 2. higher-level molecule and target resolution with explicit ambiguity stops;
-3. an Ollama structured-output adapter pinned to the local Qwen digest;
+3. claim-routing orchestration around the pinned Ollama structured-output adapter;
 4. a deterministic confidence implementation backed by benchmark calibration; and
 5. integration tests proving that retrieved citations resolve to the sealed pilot snapshot.

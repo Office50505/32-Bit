@@ -1,0 +1,13 @@
+{
+  "model": "qwen3:4b-instruct",
+  "digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+  "family": "qwen3",
+  "parameter_count": 4022468096,
+  "parameter_size": "4.0B",
+  "quantization_level": "Q4_K_M",
+  "temperature": 0,
+  "seed": 42,
+  "context_length": 8192,
+  "maximum_output_tokens": 512,
+  "structured_output_mode": "json"
+}

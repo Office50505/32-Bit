@@ -130,6 +130,18 @@ class AtomicStatement(EvidenceContractModel):
     endpoint_mentions: list[str] = Field(default_factory=list)
 
 
+class ClaimDecomposition(EvidenceContractModel):
+    statements: list[AtomicStatement] = Field(min_length=1, max_length=10)
+
+    @model_validator(mode="after")
+    def require_ordered_statement_ids(self) -> Self:
+        expected = [f"S{index}" for index in range(1, len(self.statements) + 1)]
+        actual = [statement.statement_id for statement in self.statements]
+        if actual != expected:
+            raise ValueError("statement IDs must be unique and ordered S1, S2, ...")
+        return self
+
+
 class ResolutionSummary(EvidenceContractModel):
     status: ResolutionStatus
     molecule_inchikey: str | None = None
