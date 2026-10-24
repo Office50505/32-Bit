@@ -784,3 +784,14 @@ class EvidenceStore:
         if not row["sealed"] or row["content_sha256"] is None:
             return False
         return row["content_sha256"] == self.content_sha256(snapshot_id)
+
+    def verified_snapshot_hash(self, snapshot_id: str) -> str:
+        row = self._connection.execute(
+            "SELECT content_sha256 FROM snapshots WHERE snapshot_id = ?",
+            (snapshot_id,),
+        ).fetchone()
+        if row is None:
+            raise EvidenceStoreError(f"unknown snapshot: {snapshot_id}")
+        if not self.verify_snapshot(snapshot_id) or row["content_sha256"] is None:
+            raise EvidenceStoreError(f"evidence snapshot is not sealed and verified: {snapshot_id}")
+        return str(row["content_sha256"])

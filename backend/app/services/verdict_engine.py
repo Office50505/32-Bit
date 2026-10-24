@@ -2,6 +2,7 @@ from collections.abc import Mapping
 
 from app.models.evidence_assistant import (
     ConfidenceLevel,
+    DecisionReasonCode,
     EvidencePacket,
     StatementVerdict,
     VerdictProposal,
@@ -27,6 +28,18 @@ def materialize_statement_verdict(
         if packet.conflict_assessment.disagreements
         else proposal.conflict_summary
     )
+    confidence = assess_confidence(
+        packet,
+        proposal.citation_ids,
+        benchmark_by_level=benchmark_by_level,
+    )
+    if DecisionReasonCode.MODEL_OUTPUT_REJECTED in proposal.reason_codes:
+        factor_scores = dict(confidence.factor_scores)
+        factor_scores["synthesis_validity"] = 0.0
+        factor_scores["overall"] = min(factor_scores["overall"], 0.4)
+        confidence = confidence.model_copy(
+            update={"level": ConfidenceLevel.LOW, "factor_scores": factor_scores}
+        )
     return StatementVerdict(
         statement=packet.statement,
         resolution=packet.resolution,
@@ -36,9 +49,5 @@ def materialize_statement_verdict(
         reason_codes=proposal.reason_codes,
         limitations=limitations,
         conflict_summary=conflict_summary,
-        confidence=assess_confidence(
-            packet,
-            proposal.citation_ids,
-            benchmark_by_level=benchmark_by_level,
-        ),
+        confidence=confidence,
     )
