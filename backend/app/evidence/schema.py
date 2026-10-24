@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS snapshots (
     source_name TEXT NOT NULL,
     source_version TEXT NOT NULL,
     source_sha256 TEXT NOT NULL CHECK(length(source_sha256) = 64),
+    extracted_sha256 TEXT CHECK(extracted_sha256 IS NULL OR length(extracted_sha256) = 64),
+    source_uri TEXT,
+    source_doi TEXT,
     license TEXT,
     scope_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -75,13 +78,31 @@ CREATE TABLE IF NOT EXISTS target_aliases (
 CREATE INDEX IF NOT EXISTS idx_target_aliases_normalized
     ON target_aliases(snapshot_id, normalized_alias);
 
+CREATE TABLE IF NOT EXISTS target_components (
+    snapshot_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    component_id INTEGER NOT NULL,
+    accession TEXT,
+    component_type TEXT,
+    description TEXT,
+    organism TEXT,
+    homologue INTEGER NOT NULL DEFAULT 0 CHECK(homologue IN (0, 1, 2)),
+    raw_record_sha256 TEXT NOT NULL CHECK(length(raw_record_sha256) = 64),
+    PRIMARY KEY (snapshot_id, target_id, component_id),
+    FOREIGN KEY (snapshot_id, target_id)
+        REFERENCES targets(snapshot_id, target_id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_target_components_accession
+    ON target_components(snapshot_id, accession) WHERE accession IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS papers (
     snapshot_id TEXT NOT NULL,
     paper_id TEXT NOT NULL,
     pmcid TEXT,
     pmid TEXT,
     doi TEXT,
-    title TEXT NOT NULL,
+    title TEXT,
     article_license TEXT,
     retraction_status TEXT NOT NULL,
     raw_record_sha256 TEXT NOT NULL CHECK(length(raw_record_sha256) = 64),
@@ -105,7 +126,8 @@ CREATE TABLE IF NOT EXISTS assays (
     target_id TEXT,
     organism TEXT,
     assay_type TEXT,
-    description TEXT NOT NULL,
+    description TEXT,
+    conditions_json TEXT NOT NULL DEFAULT '{}',
     target_confidence_score INTEGER,
     paper_id TEXT,
     raw_record_sha256 TEXT NOT NULL CHECK(length(raw_record_sha256) = 64),
@@ -129,9 +151,11 @@ CREATE TABLE IF NOT EXISTS activities (
     original_value REAL,
     original_unit TEXT,
     original_relation TEXT,
+    original_text_value TEXT,
     standard_value REAL,
     standard_unit TEXT,
     standard_relation TEXT,
+    standard_text_value TEXT,
     pchembl_value REAL,
     activity_outcome TEXT,
     data_validity_comment TEXT,
@@ -142,9 +166,7 @@ CREATE TABLE IF NOT EXISTS activities (
     FOREIGN KEY (snapshot_id, assay_id)
         REFERENCES assays(snapshot_id, assay_id),
     FOREIGN KEY (snapshot_id, molecule_inchikey)
-        REFERENCES molecules(snapshot_id, inchikey),
-    CHECK(original_relation IS NULL OR original_relation IN ('=', '<', '>', '<=', '>=')),
-    CHECK(standard_relation IS NULL OR standard_relation IN ('=', '<', '>', '<=', '>='))
+        REFERENCES molecules(snapshot_id, inchikey)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_activities_lookup

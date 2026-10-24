@@ -76,6 +76,28 @@ activity, paper, passage, retraction, run-record, and evidence-item tables. SQLi
 lexical passage index. Snapshot construction is writable; claim checking opens the completed file
 in read-only, immutable mode.
 
+ChEMBL extraction accepts only a database whose internal `version` table contains `ChEMBL_36`.
+The current live API is not used for this final source because it follows the latest release and may
+therefore differ from release 36. The builder records release DOI `10.6019/CHEMBL.database.36`, the
+official archive checksum, and the checksum of the unpacked SQLite database. Output construction is
+atomic: a temporary database is sealed and verified before being renamed to the requested path.
+
+Example builder invocation after the official archive has been downloaded, checksum-verified, and
+unpacked:
+
+```bash
+PYTHONPATH=backend python -m app.evidence.build_chembl36_snapshot \
+  --source-db /absolute/path/to/chembl_36.db \
+  --selection backend/config/evidence/pilot-selection.example.json \
+  --output /absolute/path/to/evidence.sqlite \
+  --snapshot-id chembl36-pilot-v1 \
+  --created-at 2026-10-24T00:00:00Z
+```
+
+The example selection is intentionally a one-molecule smoke test, not the final benchmark scope.
+The reviewed pilot manifest must expand it only after the claim set defines the required molecules,
+targets, organisms, and endpoints.
+
 Each snapshot records the source version and source hash. Sealing computes a deterministic digest
 over canonical snapshot metadata and every normalized source row. FTS rows are derived search data
 and are therefore excluded from that content digest. A sealed snapshot rejects further builder
@@ -85,7 +107,7 @@ writes, and runtime startup can verify its digest before serving claims.
 
 Before an API endpoint is exposed, the project must add:
 
-1. ChEMBL 36 and selected PubChem/PMC import adapters that preserve raw records;
+1. selected PubChem/PMC import adapters that preserve raw records;
 2. higher-level molecule and target resolution with explicit ambiguity stops;
 3. an Ollama structured-output adapter pinned to the local Qwen digest;
 4. a deterministic confidence implementation backed by benchmark calibration; and

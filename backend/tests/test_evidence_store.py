@@ -147,6 +147,7 @@ def test_schema_contains_all_phase2_tables(store: EvidenceStore) -> None:
         "molecule_aliases",
         "targets",
         "target_aliases",
+        "target_components",
         "assays",
         "activities",
         "papers",

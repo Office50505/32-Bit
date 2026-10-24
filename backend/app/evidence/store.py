@@ -26,6 +26,9 @@ class SnapshotSpec:
     source_sha256: str
     scope: dict[str, Any]
     created_at: str
+    extracted_sha256: str | None = None
+    source_uri: str | None = None
+    source_doi: str | None = None
     license: str | None = None
 
 
@@ -33,7 +36,7 @@ class SnapshotSpec:
 class PassageSearchHit:
     passage_id: str
     snapshot_id: str
-    article_title: str
+    article_title: str | None
     section_name: str
     passage_text: str
     snippet: str
@@ -46,6 +49,7 @@ _CONTENT_TABLE_KEYS: dict[str, tuple[str, ...]] = {
     "molecule_aliases": ("inchikey", "normalized_alias", "source"),
     "targets": ("target_id",),
     "target_aliases": ("target_id", "normalized_alias", "source"),
+    "target_components": ("target_id", "component_id"),
     "papers": ("paper_id",),
     "assays": ("assay_id",),
     "activities": ("activity_id",),
@@ -175,14 +179,22 @@ class EvidenceStore:
             """
             INSERT INTO snapshots(
                 snapshot_id, source_name, source_version, source_sha256,
-                license, scope_json, created_at, schema_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                extracted_sha256, source_uri, source_doi, license,
+                scope_json, created_at, schema_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot.snapshot_id,
                 snapshot.source_name,
                 snapshot.source_version,
                 source_hash,
+                (
+                    _normalized_hash(snapshot.extracted_sha256)
+                    if snapshot.extracted_sha256 is not None
+                    else None
+                ),
+                snapshot.source_uri,
+                snapshot.source_doi,
                 snapshot.license,
                 _canonical_json(snapshot.scope),
                 snapshot.created_at,
@@ -279,12 +291,42 @@ class EvidenceStore:
         )
         self._connection.commit()
 
+    def add_target_component(
+        self,
+        *,
+        snapshot_id: str,
+        target_id: str,
+        component_id: int,
+        raw_record_sha256: str,
+        accession: str | None = None,
+        component_type: str | None = None,
+        description: str | None = None,
+        organism: str | None = None,
+        homologue: int = 0,
+    ) -> None:
+        self._require_snapshot_writable(snapshot_id)
+        self._connection.execute(
+            "INSERT INTO target_components VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                snapshot_id,
+                target_id,
+                component_id,
+                accession,
+                component_type,
+                description,
+                organism,
+                homologue,
+                _normalized_hash(raw_record_sha256),
+            ),
+        )
+        self._connection.commit()
+
     def add_paper(
         self,
         *,
         snapshot_id: str,
         paper_id: str,
-        title: str,
+        title: str | None,
         retraction_status: str,
         raw_record_sha256: str,
         pmcid: str | None = None,
@@ -315,17 +357,18 @@ class EvidenceStore:
         snapshot_id: str,
         assay_id: str,
         source: str,
-        description: str,
+        description: str | None,
         raw_record_sha256: str,
         target_id: str | None = None,
         organism: str | None = None,
         assay_type: str | None = None,
+        conditions: dict[str, Any] | None = None,
         target_confidence_score: int | None = None,
         paper_id: str | None = None,
     ) -> None:
         self._require_snapshot_writable(snapshot_id)
         self._connection.execute(
-            "INSERT INTO assays VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO assays VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 snapshot_id,
                 assay_id,
@@ -334,6 +377,7 @@ class EvidenceStore:
                 organism,
                 assay_type,
                 description,
+                _canonical_json(conditions or {}),
                 target_confidence_score,
                 paper_id,
                 _normalized_hash(raw_record_sha256),
@@ -353,9 +397,11 @@ class EvidenceStore:
         original_value: float | None = None,
         original_unit: str | None = None,
         original_relation: str | None = None,
+        original_text_value: str | None = None,
         standard_value: float | None = None,
         standard_unit: str | None = None,
         standard_relation: str | None = None,
+        standard_text_value: str | None = None,
         pchembl_value: float | None = None,
         activity_outcome: str | None = None,
         data_validity_comment: str | None = None,
@@ -363,7 +409,11 @@ class EvidenceStore:
     ) -> None:
         self._require_snapshot_writable(snapshot_id)
         self._connection.execute(
-            "INSERT INTO activities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT INTO activities VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
             (
                 snapshot_id,
                 activity_id,
@@ -373,9 +423,11 @@ class EvidenceStore:
                 original_value,
                 original_unit,
                 original_relation,
+                original_text_value,
                 standard_value,
                 standard_unit,
                 standard_relation,
+                standard_text_value,
                 pchembl_value,
                 activity_outcome,
                 data_validity_comment,
@@ -630,7 +682,8 @@ class EvidenceStore:
         snapshot = self._connection.execute(
             """
             SELECT snapshot_id, source_name, source_version, source_sha256,
-                   license, scope_json, created_at, schema_version
+                   extracted_sha256, source_uri, source_doi, license,
+                   scope_json, created_at, schema_version
             FROM snapshots WHERE snapshot_id = ?
             """,
             (snapshot_id,),
