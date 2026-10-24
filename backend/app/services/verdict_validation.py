@@ -65,6 +65,8 @@ def validate_verdict(packet: EvidencePacket, proposal: VerdictProposal) -> list[
             item.target_id != packet.resolution.target_id for item in cited
         ):
             violations.append("CITATION_TARGET_MISMATCH")
+        if packet.conflict_assessment.decision_conflict:
+            violations.append("COMPARABLE_ASSAY_CONFLICT_REQUIRES_ABSTENTION")
 
     direct_support = [
         item
@@ -118,6 +120,11 @@ def validate_verdict(packet: EvidencePacket, proposal: VerdictProposal) -> list[
     elif proposal.verdict == Verdict.INSUFFICIENT_EVIDENCE:
         if not proposal.reason_codes:
             violations.append("INSUFFICIENT_EVIDENCE_REQUIRES_REASON_CODE")
+        if (
+            packet.conflict_assessment.decision_conflict
+            and DecisionReasonCode.CONFLICTING_ASSAYS not in proposal.reason_codes
+        ):
+            violations.append("ASSAY_CONFLICT_REQUIRES_CONFLICT_REASON_CODE")
 
     elif proposal.verdict == Verdict.OUT_OF_SCOPE:
         if proposal.citation_ids:
@@ -151,6 +158,8 @@ def default_insufficient_reason(packet: EvidencePacket) -> DecisionReasonCode:
         return DecisionReasonCode.AMBIGUOUS_ENTITY
     if packet.resolution.status == ResolutionStatus.UNRESOLVED:
         return DecisionReasonCode.UNRESOLVED_ENTITY
+    if packet.conflict_assessment.decision_conflict:
+        return DecisionReasonCode.CONFLICTING_ASSAYS
     if packet.evidence_items and all(
         item.retraction_status == RetractionStatus.RETRACTED for item in packet.evidence_items
     ):

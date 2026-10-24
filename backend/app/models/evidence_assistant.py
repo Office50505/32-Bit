@@ -75,6 +75,12 @@ class EvidenceDirectness(StrEnum):
     CONTEXT_ONLY = "CONTEXT_ONLY"
 
 
+class AssayDisagreementKind(StrEnum):
+    DIRECT_STANCE_CONFLICT = "DIRECT_STANCE_CONFLICT"
+    NUMERIC_DIVERGENCE = "NUMERIC_DIVERGENCE"
+    CONTEXTUAL_STANCE_DIFFERENCE = "CONTEXTUAL_STANCE_DIFFERENCE"
+
+
 class RetractionStatus(StrEnum):
     CLEAR = "CLEAR"
     RETRACTED = "RETRACTED"
@@ -199,10 +205,44 @@ class EvidenceItem(EvidenceContractModel):
         return self
 
 
+class AssayDisagreement(EvidenceContractModel):
+    evidence_ids: list[str] = Field(min_length=2, max_length=2)
+    kind: AssayDisagreementKind
+    comparable: bool
+    fold_difference: float | None = Field(default=None, ge=1)
+    differing_dimensions: list[str] = Field(default_factory=list)
+    summary: str = Field(min_length=1, max_length=2_000)
+
+    @field_validator("evidence_ids")
+    @classmethod
+    def require_distinct_evidence_ids(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != 2:
+            raise ValueError("assay disagreement requires two distinct evidence IDs")
+        return value
+
+
+class ConflictAssessment(EvidenceContractModel):
+    decision_conflict: bool = False
+    disagreements: list[AssayDisagreement] = Field(default_factory=list, max_length=100)
+    summary: str | None = Field(default=None, max_length=5_000)
+
+    @model_validator(mode="after")
+    def require_direct_conflict_when_decision_is_blocked(self) -> Self:
+        has_direct_conflict = any(
+            disagreement.comparable
+            and disagreement.kind == AssayDisagreementKind.DIRECT_STANCE_CONFLICT
+            for disagreement in self.disagreements
+        )
+        if self.decision_conflict and not has_direct_conflict:
+            raise ValueError("decision conflict requires a comparable assay disagreement")
+        return self
+
+
 class EvidencePacket(EvidenceContractModel):
     statement: AtomicStatement
     resolution: ResolutionSummary
     evidence_items: list[EvidenceItem] = Field(default_factory=list, max_length=50)
+    conflict_assessment: ConflictAssessment = Field(default_factory=ConflictAssessment)
 
     @model_validator(mode="after")
     def require_unique_evidence_ids(self) -> Self:

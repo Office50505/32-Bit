@@ -621,10 +621,18 @@ class EvidenceStore:
         parameters.append(limit)
         return self._connection.execute(
             f"""
-            SELECT activities.*, assays.source, assays.organism, assays.assay_type,
-                   assays.description, assays.target_confidence_score, assays.paper_id
+            SELECT activities.*,
+                   activities.raw_record_sha256 AS activity_raw_record_sha256,
+                   assays.source, assays.target_id, assays.organism, assays.assay_type,
+                   assays.description, assays.conditions_json,
+                   assays.target_confidence_score, assays.paper_id,
+                   assays.raw_record_sha256 AS assay_raw_record_sha256,
+                   papers.retraction_status AS paper_retraction_status
             FROM activities
             JOIN assays USING (snapshot_id, assay_id)
+            LEFT JOIN papers
+              ON papers.snapshot_id = assays.snapshot_id
+             AND papers.paper_id = assays.paper_id
             WHERE {' AND '.join(clauses)}
             ORDER BY
                 activities.data_validity_comment IS NOT NULL,
