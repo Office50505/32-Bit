@@ -4,8 +4,9 @@
 **Scope:** typed claim decomposition, structured assay/run/passage evidence packets, assay
 comparison, deterministic verdict validation, fail-closed local-model orchestration, confidence
 scoring, and research-aid output labelling.
-**Not yet complete:** frozen PubChem/PMC/retraction imports, reviewed pilot scope, passage
-entailment, API/UI exposure, and the locked 150-claim evaluation.
+**Not yet complete:** acquisition of the reviewed frozen source files, the final combined pilot
+bundle, reviewed pilot scope, passage entailment, API/UI exposure, and the locked 150-claim
+evaluation.
 
 ## 1. Authority boundary
 
@@ -129,15 +130,26 @@ paper ID, section/paragraph/character locator, passage text, passage hash, and r
 but the passage is labelled `CONTEXT_ONLY` and neutral until a passage-entailment method has been
 evaluated. This prevents lexical retrieval alone from turning prose into a supported mechanism.
 
+Frozen importers are implemented for selected PubChem concise BioAssay JSON, Europe PMC open-access
+JATS XML, and the Crossref Retraction Watch CSV. PubChem rows are whitelisted by reviewed AID/CID
+selection, retain AID/SID/CID identity and raw-row hashes, and normalize reported micromolar values
+to nanomolar values without discarding the original. JATS passages retain PMCID, paper identifiers,
+section, paragraph, character offsets, text hashes, article license, and full-XML hash. The
+Retraction Watch index normalizes DOI/PMID identifiers, records each notice, and handles a later
+dated reinstatement without erasing the earlier retraction record. All source snapshots are sealed
+before runtime use.
+
 ## 8. Next implementation gate
 
 Before an API endpoint is exposed, the project must add:
 
-1. selected PubChem/PMC import adapters and a frozen retraction index that preserve raw records;
-2. a reviewed pilot selection derived from (but kept separate from) the 150 evaluation claims;
-3. a benchmarked passage-entailment step or an explicit decision to keep literature claims
+1. acquire and checksum the official source files, then build and integration-test the combined
+   sealed pilot database;
+2. define a reviewed pilot selection independently of the locked 150 evaluation claims;
+3. supply and freeze the 150-claim gold set with reviewer labels and evidence references;
+4. add a benchmarked passage-entailment step or explicitly keep literature claims
    abstention-only;
-4. confidence calibration and a retrieval-plus-LLM baseline on the locked 150-claim set;
-5. integration tests against the real sealed pilot snapshot, including citation resolution; and
-6. latency profiling and an operational decision about the current Qwen/Ollama combination, which
+5. calibrate confidence and run the retrieval-plus-LLM baseline on that locked set;
+6. expose the reviewed service through the API and build the evidence-assistant UI; and
+7. profile latency and make an operational decision about the current Qwen/Ollama combination, which
    has not met the under-ten-second warm target in local experiments.
