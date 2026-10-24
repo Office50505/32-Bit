@@ -24,6 +24,9 @@ export function SourceReviewDialog({ dialogRef, molecule, sourceUrl, sourceFile,
         <span className="modal-pane-label">SOURCE DOCUMENT</span>
         {matchesUploadedFile && sourceUrl && sourceFile?.type.startsWith("image/") ? <img src={sourceUrl} alt={`Uploaded source ${sourceFile.name}`} />
           : matchesUploadedFile && sourceUrl && sourceFile?.type === "application/pdf" ? <iframe src={sourceUrl} title={`Uploaded source ${sourceFile.name}`} />
+            : matchesUploadedFile && sourceFile && /\.csv$/i.test(sourceFile.name) ? <div className="paper-excerpt"><span>CSV SOURCE</span><h3>{sourceFile.name}</h3>
+              <p>{molecule.label} · imported SMILES</p><code>{molecule.smiles}</code>
+              <small>{`Verified SHA-256 ${molecule.sourceFileSha256}`}</small></div>
             : <div className="paper-excerpt"><span>RECORDED SOURCE METADATA</span><h3>{molecule.sourceFileSha256 ? "Source file is not available in this browser session" : "Direct SMILES entry"}</h3>
               <p>{molecule.label} · {molecule.source}</p><code>{molecule.smiles}</code>
               <small>{molecule.sourceFileSha256 ? `Expected SHA-256 ${molecule.sourceFileSha256}` : "No source document was attached to this analysis."}</small></div>}

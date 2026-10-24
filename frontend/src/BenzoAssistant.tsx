@@ -1,37 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUp, ChevronDown, FlaskConical, ShieldCheck, X } from "lucide-react";
+import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from "react";
+import { ArrowUp, ShieldCheck, X } from "lucide-react";
 
-import { checkEvidenceClaim } from "./api/evidence";
-import type {
-  ClaimCheckResponse,
-  EvidenceCitation,
-  EvidenceStatementVerdict,
-  EvidenceVerdict,
-} from "./schemas/evidence";
+import { askBenzo } from "./api/benzo";
+import type { BenzoChatResponse } from "./schemas/benzo";
 
 type ConversationItem =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; response: ClaimCheckResponse }
+  | { id: number; role: "assistant"; response: BenzoChatResponse }
   | { id: number; role: "notice"; text: string }
   | { id: number; role: "error"; text: string };
-
-const VERDICT_LABELS: Record<EvidenceVerdict, string> = {
-  SUPPORTED: "Supported",
-  CONTRADICTED: "Contradicted",
-  INSUFFICIENT_EVIDENCE: "Insufficient evidence",
-  OUT_OF_SCOPE: "Out of scope",
-};
 
 const SUGGESTIONS = [
   "Imatinib inhibits ABL1.",
   "What is the difference between L-alanine and D-alanine?",
   "What is the molecular formula of sulfuric acid?",
   "Give me facts about aspirin",
+  "How do I fix an invalid bond order?",
+  "Suggest a valid aromatic ring SMILES.",
 ];
 
-const ASSISTANT_IMAGE = "/miss-minutes-assistant.png";
-const VIEWPORT_MARGIN = 12;
+const VIEWPORT_MARGIN = 8;
 
 interface AssistantPosition {
   x: number;
@@ -40,25 +29,51 @@ interface AssistantPosition {
 
 interface DragState {
   pointerId: number;
-  originX: number;
-  pointerX: number;
-  pointerY: number;
+  offsetX: number;
+  offsetY: number;
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastY: number;
   moved: boolean;
 }
 
-function MissMinutesFigure() {
-  const imageProps = {
-    src: ASSISTANT_IMAGE,
-    alt: "",
-    draggable: false,
-  } as const;
-
-  return <span className="miss-minutes-character" aria-hidden="true">
-    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__torso" />
-    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__arm miss-minutes-character__arm--wave" />
-    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__arm miss-minutes-character__arm--right" />
-    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__leg miss-minutes-character__leg--left" />
-    <img {...imageProps} className="miss-minutes-character__piece miss-minutes-character__leg miss-minutes-character__leg--right" />
+function AnimatedBenzoMascot() {
+  return <span className="benzo-character" aria-hidden="true">
+    <svg viewBox="0 0 160 160" role="presentation">
+      <defs>
+        <linearGradient id="benzo-spectrum" x1="35" y1="32" x2="126" y2="128" gradientUnits="userSpaceOnUse">
+          <stop className="benzo-character__stop benzo-character__stop--cyan" />
+          <stop className="benzo-character__stop benzo-character__stop--blue" offset="0.47" />
+          <stop className="benzo-character__stop benzo-character__stop--violet" offset="0.74" />
+          <stop className="benzo-character__stop benzo-character__stop--magenta" offset="1" />
+        </linearGradient>
+      </defs>
+      <g className="benzo-character__bonds" strokeWidth="5">
+        <path d="M80 35V17M120 57l17-10M120 103l17 10M80 125v18M40 103l-17 10M40 57 23 47" fill="none" />
+        <circle cx="80" cy="12" r="7" />
+        <circle cx="143" cy="43" r="7" />
+        <circle cx="143" cy="117" r="7" />
+        <circle cx="80" cy="148" r="7" />
+        <circle cx="17" cy="117" r="7" />
+        <circle cx="17" cy="43" r="7" />
+      </g>
+      <path className="benzo-character__ring" d="M80 34 120 57v46l-40 23-40-23V57Z" />
+      <circle className="benzo-character__inner" cx="80" cy="80" r="29" />
+      <g className="benzo-character__face">
+        <g className="benzo-character__eyes">
+          <ellipse cx="65" cy="76" rx="4.5" ry="5.5" />
+          <ellipse cx="95" cy="76" rx="4.5" ry="5.5" />
+          <circle className="benzo-character__eye-shine" cx="66.5" cy="74.5" r="1.35" />
+          <circle className="benzo-character__eye-shine" cx="96.5" cy="74.5" r="1.35" />
+        </g>
+        <g className="benzo-character__cheeks">
+          <circle cx="55" cy="93" r="6" />
+          <circle cx="105" cy="93" r="6" />
+        </g>
+        <path className="benzo-character__smile" d="M68 91q12 13 24 0" />
+      </g>
+    </svg>
   </span>;
 }
 
@@ -66,192 +81,99 @@ function isGreeting(value: string): boolean {
   return /^(?:hi|hey|hello|yo|good\s+(?:morning|afternoon|evening))[!.\s]*$/i.test(value);
 }
 
-function citationMeasurement(citation: EvidenceCitation): string | null {
-  if (citation.value === null || citation.value === undefined) return null;
-  return `${citation.relation ?? ""}${citation.value}${citation.unit ? ` ${citation.unit}` : ""}`;
-}
-
-function Citation({ citation, index }: { citation: EvidenceCitation; index: number }) {
-  const measurement = citationMeasurement(citation);
-  const assayDescription = citation.assay_conditions.description;
-  const recordKind = citation.assay_conditions.record_kind;
-  const compoundTitle = citation.assay_conditions.title;
-  const molecularFormula = citation.assay_conditions.molecular_formula;
-  const molecularWeight = citation.assay_conditions.molecular_weight;
-  const isomericSmiles = citation.assay_conditions.isomeric_smiles;
-  const sourceUrl = citation.assay_conditions.source_url;
-  const sourceLabel = recordKind === "PUBCHEM_COMPOUND"
-    ? "PubChem compound"
-    : citation.source_type.replaceAll("_", " ");
-  return <details className="benzo-citation">
-    <summary>
-      <span>[{index + 1}] {sourceLabel}</span>
-      <ChevronDown size={14} />
-    </summary>
-    <dl>
-      <div><dt>Record</dt><dd>{citation.source_record_id}</dd></div>
-      {measurement ? <div><dt>Measurement</dt><dd>{measurement}</dd></div> : null}
-      {citation.paper_id ? <div><dt>Paper</dt><dd>{citation.paper_id}</dd></div> : null}
-      {typeof assayDescription === "string" && assayDescription
-        ? <div><dt>Assay</dt><dd>{assayDescription}</dd></div>
-        : null}
-      {recordKind === "PUBCHEM_COMPOUND" && typeof compoundTitle === "string"
-        ? <div><dt>Compound</dt><dd>{compoundTitle}</dd></div>
-        : null}
-      {typeof molecularFormula === "string"
-        ? <div><dt>Formula</dt><dd>{molecularFormula}</dd></div>
-        : null}
-      {typeof molecularWeight === "string"
-        ? <div><dt>Weight</dt><dd>{molecularWeight} g/mol</dd></div>
-        : null}
-      {typeof isomericSmiles === "string"
-        ? <div><dt>Isomeric SMILES</dt><dd>{isomericSmiles}</dd></div>
-        : null}
-      {citation.passage_locator ? <div><dt>Passage</dt><dd>{citation.passage_locator}</dd></div> : null}
-      <div><dt>Retraction check</dt><dd>{recordKind === "PUBCHEM_COMPOUND" ? "Not applicable" : citation.retraction_status}</dd></div>
-      <div><dt>Snapshot</dt><dd>{citation.snapshot_id}</dd></div>
-      {typeof sourceUrl === "string" && sourceUrl.startsWith("https://")
-        ? <div><dt>Source</dt><dd><a href={sourceUrl} target="_blank" rel="noreferrer">PubChem record</a></dd></div>
-        : null}
-    </dl>
-  </details>;
-}
-
-function VerdictCard({ result }: { result: EvidenceStatementVerdict }) {
-  return <article className="benzo-verdict">
-    <div className="benzo-verdict__meta">
-      <span className={`benzo-verdict__badge benzo-verdict__badge--${result.verdict.toLowerCase()}`}>
-        {VERDICT_LABELS[result.verdict]}
+function AssistantResponse({ response }: { response: BenzoChatResponse }) {
+  return <div className={`benzo-response benzo-response--${response.scope.toLowerCase()}`}>
+    <div className="benzo-response__meta">
+      <span className="benzo-response__badge">
+        {response.scope === "ANSWERED" ? "Molecular guidance" : "Project scope only"}
       </span>
-      <span>{result.confidence.level.toLowerCase()} confidence</span>
     </div>
-    <h4>{result.statement.text}</h4>
-    <p>{result.reason}</p>
-    {result.conflict_summary ? <p className="benzo-verdict__conflict">{result.conflict_summary}</p> : null}
-    {result.citations.length ? <div className="benzo-citations" aria-label="Evidence citations">
-      {result.citations.map((citation, index) => (
-        <Citation key={citation.evidence_id} citation={citation} index={index} />
-      ))}
-    </div> : <p className="benzo-verdict__empty">No eligible citation was available for this verdict.</p>}
-  </article>;
-}
-
-function AssistantResponse({ response }: { response: ClaimCheckResponse }) {
-  return <div className="benzo-response">
-    {response.verdicts.map((result) => (
-      <VerdictCard key={result.statement.statement_id} result={result} />
-    ))}
-    <p className="benzo-response__source">
-      {response.manifest.evidence_snapshot_id} · {response.manifest.model_name}
-    </p>
+    <p className="benzo-response__answer">{response.answer}</p>
+    {response.suggestions.length ? <div className="benzo-structure-suggestions" aria-label="Structure suggestions">
+      {response.suggestions.map((suggestion, index) => <article className="benzo-structure-suggestion" key={`${suggestion.title}-${index}`}>
+        <strong>{suggestion.title}</strong>
+        <p>{suggestion.detail}</p>
+        {suggestion.smiles ? <code>{suggestion.smiles}</code> : null}
+      </article>)}
+    </div> : null}
   </div>;
 }
 
-export function BenzoAssistant() {
+export function BenzoAssistant({ currentSmiles }: { currentSmiles?: string | null }) {
   const [open, setOpen] = useState(false);
   const [claim, setClaim] = useState("");
   const [items, setItems] = useState<ConversationItem[]>([]);
   const [checking, setChecking] = useState(false);
   const [position, setPosition] = useState<AssistantPosition | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [walking, setWalking] = useState(false);
-  const [facing, setFacing] = useState<"left" | "right">("left");
   const sequence = useRef(0);
   const shellRef = useRef<HTMLElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
   const positionRef = useRef<AssistantPosition | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
 
-  function clampToBottomTrack(x: number): AssistantPosition {
-    const shell = shellRef.current;
-    const width = shell?.offsetWidth ?? 150;
-    const height = shell?.offsetHeight ?? 154;
+  function clampPosition(x: number, y: number): AssistantPosition {
+    const launcher = launcherRef.current;
+    const width = launcher?.offsetWidth ?? 112;
+    const height = launcher?.offsetHeight ?? 154;
     return {
       x: Math.max(VIEWPORT_MARGIN, Math.min(x, window.innerWidth - width - VIEWPORT_MARGIN)),
-      y: Math.max(VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN),
+      y: Math.max(VIEWPORT_MARGIN, Math.min(y, window.innerHeight - height - VIEWPORT_MARGIN)),
     };
-  }
-
-  function moveTo(next: AssistantPosition) {
-    positionRef.current = next;
-    setPosition(next);
   }
 
   useEffect(() => {
-    const placeOrClamp = () => {
-      const shell = shellRef.current;
-      if (!shell) return;
+    const keepInViewport = () => {
       const current = positionRef.current;
-      moveTo(current
-        ? clampToBottomTrack(current.x)
-        : clampToBottomTrack(window.innerWidth - shell.offsetWidth - 22));
+      if (!current) return;
+      const next = clampPosition(current.x, current.y);
+      positionRef.current = next;
+      setPosition(next);
     };
-    const frame = window.requestAnimationFrame(placeOrClamp);
-    window.addEventListener("resize", placeOrClamp);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", placeOrClamp);
-    };
+    window.addEventListener("resize", keepInViewport);
+    return () => window.removeEventListener("resize", keepInViewport);
   }, []);
-
-  useEffect(() => {
-    if (open || dragging || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setWalking(false);
-      return;
-    }
-
-    let finishTimer = 0;
-    const roam = () => {
-      const shell = shellRef.current;
-      if (!shell) return;
-      const maximumX = Math.max(VIEWPORT_MARGIN, window.innerWidth - shell.offsetWidth - VIEWPORT_MARGIN);
-      const current = positionRef.current;
-      const midpoint = VIEWPORT_MARGIN + (maximumX - VIEWPORT_MARGIN) / 2;
-      const targetX = (current?.x ?? maximumX) > midpoint ? VIEWPORT_MARGIN : maximumX;
-      const next = clampToBottomTrack(targetX);
-      setFacing(targetX >= (current?.x ?? targetX) ? "right" : "left");
-      setWalking(true);
-      moveTo(next);
-      window.clearTimeout(finishTimer);
-      finishTimer = window.setTimeout(() => setWalking(false), 4600);
-    };
-
-    const firstMove = window.setTimeout(roam, 1400);
-    const interval = window.setInterval(roam, 6800);
-    return () => {
-      window.clearTimeout(firstMove);
-      window.clearInterval(interval);
-      window.clearTimeout(finishTimer);
-    };
-  }, [dragging, open]);
 
   function beginDrag(event: ReactPointerEvent<HTMLButtonElement>) {
     if (open || event.button !== 0) return;
     const shell = shellRef.current;
     if (!shell) return;
-    const bounds = shell.getBoundingClientRect();
-    const current = positionRef.current ?? { x: bounds.left, y: bounds.top };
-    moveTo(current);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const start = { x: bounds.left, y: bounds.top };
+    positionRef.current = start;
+    shell.style.left = `${start.x}px`;
+    shell.style.top = `${start.y}px`;
+    shell.style.right = "auto";
+    shell.style.bottom = "auto";
     dragRef.current = {
       pointerId: event.pointerId,
-      originX: current.x,
-      pointerX: event.clientX,
-      pointerY: event.clientY,
+      offsetX: event.clientX - bounds.left,
+      offsetY: event.clientY - bounds.top,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: start.x,
+      lastY: start.y,
       moved: false,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setWalking(false);
     setDragging(true);
   }
 
   function continueDrag(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - drag.pointerX;
-    const deltaY = event.clientY - drag.pointerY;
-    if (Math.hypot(deltaX, deltaY) > 4) drag.moved = true;
-    if (Math.abs(deltaX) > 1) setFacing(deltaX > 0 ? "right" : "left");
-    moveTo(clampToBottomTrack(drag.originX + deltaX));
+    const shell = shellRef.current;
+    if (!drag || !shell || drag.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) {
+      drag.moved = true;
+    }
+    const next = clampPosition(event.clientX - drag.offsetX, event.clientY - drag.offsetY);
+    drag.lastX = next.x;
+    drag.lastY = next.y;
+    positionRef.current = next;
+    shell.style.left = `${next.x}px`;
+    shell.style.top = `${next.y}px`;
+    setPosition(next);
   }
 
   function endDrag(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -260,6 +182,7 @@ export function BenzoAssistant() {
     suppressClickRef.current = drag.moved;
     dragRef.current = null;
     setDragging(false);
+    setPosition({ x: drag.lastX, y: drag.lastY });
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -284,7 +207,7 @@ export function BenzoAssistant() {
         {
           id: ++sequence.current,
           role: "notice",
-          text: "Hey! Give me a molecule question or a scientific claim, and I’ll show the frozen records behind my answer.",
+          text: "Hey! Ask me about ProvenanceLab, a molecule, its bonds, or a SMILES structure.",
         },
       ]);
       setClaim("");
@@ -294,13 +217,13 @@ export function BenzoAssistant() {
     setClaim("");
     setChecking(true);
     try {
-      const response = await checkEvidenceClaim(submitted);
+      const response = await askBenzo(submitted, currentSmiles);
       setItems((current) => [
         ...current,
         { id: ++sequence.current, role: "assistant", response },
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Miss Minutes could not check this claim.";
+      const message = error instanceof Error ? error.message : "Benzo could not answer that question.";
       setItems((current) => [
         ...current,
         { id: ++sequence.current, role: "error", text: message },
@@ -314,36 +237,32 @@ export function BenzoAssistant() {
     setClaim(suggestion);
   }
 
-  const positionStyle = !open && position
+  const positionStyle: CSSProperties | undefined = position
     ? { left: position.x, top: position.y, right: "auto", bottom: "auto" }
     : undefined;
 
   return <aside
     ref={shellRef}
-    className={`benzo-shell${open ? " benzo-shell--open" : ""}${walking ? " benzo-shell--walking" : ""}${dragging ? " benzo-shell--dragging" : ""} benzo-shell--facing-${facing}`}
+    className={`benzo-shell${open ? " benzo-shell--open" : ""}${dragging ? " benzo-shell--dragging" : ""}`}
     style={positionStyle}
   >
     {open ? <section
       id="benzo-assistant-panel"
       className="benzo-panel"
       role="dialog"
-      aria-label="Miss Minutes evidence assistant"
+      aria-label="Benzo molecular assistant"
     >
       <header className="benzo-header">
-        <img src={ASSISTANT_IMAGE} alt="" />
-        <div><strong>Ask Miss Minutes</strong><span><i /> Frozen evidence assistant</span></div>
-        <button type="button" onClick={() => setOpen(false)} aria-label="Close Miss Minutes assistant">
+        <AnimatedBenzoMascot />
+        <div><strong>Ask Benzo</strong></div>
+        <button type="button" onClick={() => setOpen(false)} aria-label="Close Benzo assistant">
           <X size={18} />
         </button>
       </header>
 
       <div className="benzo-feed" aria-live="polite">
-        <div className="benzo-intro">
-          <span className="benzo-intro__icon"><FlaskConical size={17} /></span>
-          <div><strong>I check claims, not predict outcomes.</strong><p>New compounds are frozen from PubChem on demand. Activity questions resolve the molecule and target, then freeze matching ChEMBL assays and their paper records before I answer.</p></div>
-        </div>
         {!items.length ? <div className="benzo-suggestions">
-          <span>Try a claim</span>
+          <span>Try a molecular question</span>
           {SUGGESTIONS.map((suggestion) => (
             <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>
               {suggestion}
@@ -355,13 +274,13 @@ export function BenzoAssistant() {
           : item.role === "notice"
             ? <div key={item.id} className="benzo-message benzo-message--notice">{item.text}</div>
           : item.role === "error"
-            ? <div key={item.id} className="benzo-message benzo-message--error"><strong>Couldn’t check that claim</strong><span>{item.text}</span></div>
+            ? <div key={item.id} className="benzo-message benzo-message--error"><strong>Couldn’t answer that</strong><span>{item.text}</span></div>
             : <AssistantResponse key={item.id} response={item.response} />)}
-        {checking ? <div className="benzo-thinking" role="status"><img src={ASSISTANT_IMAGE} alt="" /><span>Resolving records and creating a frozen evidence snapshot…</span></div> : null}
+        {checking ? <div className="benzo-thinking" role="status"><AnimatedBenzoMascot /><span>Benzo is checking the molecule and project context…</span></div> : null}
       </div>
 
       <form className="benzo-composer" onSubmit={(event) => void submitClaim(event)}>
-        <label htmlFor="benzo-claim">Scientific claim</label>
+        <label htmlFor="benzo-claim">Molecular question</label>
         <div>
           <textarea
             id="benzo-claim"
@@ -373,35 +292,38 @@ export function BenzoAssistant() {
                 void submitClaim();
               }
             }}
-            placeholder="Ask about a molecule or paste a claim…"
+            placeholder="Ask about bonds, SMILES, or this project…"
             rows={2}
-            maxLength={20_000}
+            maxLength={4_000}
           />
-          <button type="submit" disabled={!claim.trim() || checking} aria-label="Check claim">
+          <button type="submit" disabled={!claim.trim() || checking} aria-label="Ask Benzo">
             <ArrowUp size={18} />
           </button>
         </div>
       </form>
-      <footer className="benzo-disclaimer"><ShieldCheck size={14} /> Research aid only—not a prediction of efficacy or safety.</footer>
+      <footer className="benzo-disclaimer"><ShieldCheck size={14} /> Project-scoped guidance. Validate suggested structures before use.</footer>
     </section> : null}
 
     <button
+      ref={launcherRef}
       type="button"
       className="benzo-launcher"
       onPointerDown={beginDrag}
       onPointerMove={continueDrag}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
+      onLostPointerCapture={endDrag}
       onClick={() => {
         if (suppressClickRef.current) return;
         setOpen((current) => !current);
       }}
       aria-expanded={open}
       aria-controls="benzo-assistant-panel"
-      aria-label={open ? "Close Miss Minutes evidence assistant" : "Open Miss Minutes evidence assistant"}
+      aria-label={open ? "Close Benzo molecular assistant" : "Open Benzo molecular assistant"}
+      title={open ? "Close Benzo" : "Drag Benzo or click to ask"}
     >
       <span className="benzo-launcher__label">Hi! How can I help? ✨</span>
-      <MissMinutesFigure />
+      <AnimatedBenzoMascot />
     </button>
   </aside>;
 }

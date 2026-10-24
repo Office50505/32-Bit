@@ -17,6 +17,7 @@ from app.models.analysis import (
     ImageExtractionResponse,
     RunResponse,
 )
+from app.models.benzo import BenzoChatRequest, BenzoChatResponse
 from app.models.evidence_assistant import ClaimCheckRequest, ClaimCheckResponse
 from app.services.chemistry import analyze_structure
 from app.services.evidence_runtime import EvidenceRuntimeError, get_evidence_runtime
@@ -27,6 +28,7 @@ from app.services.image_recognition import (
     recognize_image,
 )
 from app.services.ollama import OllamaError
+from app.services.openai_benzo import BenzoServiceError, get_benzo_assistant
 from app.services.report import build_run_pdf
 from app.services.runs import create_run, get_run
 
@@ -61,6 +63,14 @@ def check_evidence_claim(request: ClaimCheckRequest) -> ClaimCheckResponse:
     try:
         return get_evidence_runtime().check_claim(request)
     except (EvidenceRuntimeError, EvidenceStoreError, OllamaError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@router.post("/benzo/chat", response_model=BenzoChatResponse)
+def chat_with_benzo(request: BenzoChatRequest) -> BenzoChatResponse:
+    try:
+        return get_benzo_assistant().answer(request)
+    except BenzoServiceError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 

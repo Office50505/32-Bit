@@ -1,5 +1,5 @@
 import type { ChangeEvent, DragEvent, FormEvent } from "react";
-import { ArrowDown, ArrowRight, FileCheck2, UploadCloud } from "lucide-react";
+import { ArrowRight, FileCheck2, FileSpreadsheet, UploadCloud } from "lucide-react";
 
 import Molecule3D from "./Molecule3D";
 
@@ -51,6 +51,7 @@ export function SourceLanding({
   const hashPending = Boolean(file && !fileHash && !fileError);
   const canReview = Boolean(cleanSmiles && !hashPending);
   const formulaSuggestion = FORMULA_TO_SMILES[cleanSmiles.toUpperCase()];
+  const csvSelected = Boolean(file && (/\.csv$/i.test(file.name) || file.type === "text/csv"));
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,21 +92,39 @@ export function SourceLanding({
 
             <div className="source-hero__actions">
               <label
-                className={`source-upload${file ? " source-upload--selected" : ""}`}
+                className={`source-upload${file && !csvSelected ? " source-upload--selected" : ""}`}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={handleDrop}
               >
                 <input
                   className="source-upload__input"
                   type="file"
+                  accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+                  aria-label="Upload a PDF or molecular image"
                   aria-describedby={fileError ? "source-file-error" : "source-file-help"}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     void onFileSelect(event.target.files?.[0]);
                     event.target.value = "";
                   }}
                 />
-                {file ? <FileCheck2 size={18} strokeWidth={1.7} /> : <UploadCloud size={18} strokeWidth={1.7} />}
-                <strong>{file?.name ?? "Upload file"}</strong>
+                {file && !csvSelected ? <FileCheck2 size={18} strokeWidth={1.7} /> : <UploadCloud size={18} strokeWidth={1.7} />}
+                <strong>{file && !csvSelected ? file.name : "PDF / image"}</strong>
+              </label>
+
+              <label className={`source-upload${csvSelected ? " source-upload--selected" : ""}`}>
+                <input
+                  className="source-upload__input"
+                  type="file"
+                  accept="text/csv,application/csv,.csv"
+                  aria-label="Upload a CSV file"
+                  aria-describedby={fileError ? "source-file-error" : "source-file-help"}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    void onFileSelect(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+                {csvSelected ? <FileCheck2 size={18} strokeWidth={1.7} /> : <FileSpreadsheet size={18} strokeWidth={1.7} />}
+                <strong>{csvSelected ? file?.name : "Upload CSV"}</strong>
               </label>
 
               <button className="source-hero__submit" type="submit" disabled={!canReview}>
@@ -115,7 +134,7 @@ export function SourceLanding({
               <span className="source-hero__sr-title" id="source-file-help">
                 {file
                   ? `${formatFileSize(file.size)} · ${fileHash ? "Ready" : "Preparing…"}`
-                  : "PDF or any file · 5 MB max"}
+                  : "PDF, image, or CSV with a SMILES column · 5 MB max"}
               </span>
             </div>
             {fileError ? <p className="source-hero__error" id="source-file-error" role="alert">{fileError}</p> : null}
@@ -139,9 +158,6 @@ export function SourceLanding({
           </div>
         </div>
 
-        <a className="source-hero__down" href="#source-path" aria-label="See how the analysis works">
-          <ArrowDown size={21} strokeWidth={1.7} />
-        </a>
       </section>
 
       <section className="source-path" id="source-path" aria-labelledby="source-path-title">

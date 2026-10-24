@@ -96,7 +96,7 @@ class PropertyComparison(ApiModel):
 
 class SourceMetadata(ApiModel):
     filename: str | None = None
-    source_type: Literal["direct-smiles", "photo", "paper"] | None = None
+    source_type: Literal["direct-smiles", "photo", "paper", "csv"] | None = None
     citation: str | None = None
     page: int | None = None
     media_type: str | None = None
@@ -117,7 +117,7 @@ class SourceMetadata(ApiModel):
             if any(value is not None for value in supplied_file_fields):
                 raise ValueError("direct SMILES input cannot include file metadata")
             return self
-        if self.source_type in {"photo", "paper"}:
+        if self.source_type in {"photo", "paper", "csv"}:
             required = {
                 "filename": self.filename,
                 "media_type": self.media_type,
@@ -138,6 +138,8 @@ class SourceMetadata(ApiModel):
                 "image/webp",
             }:
                 raise ValueError("photo sources must be PNG, JPEG, or WebP")
+            if self.source_type == "csv" and self.media_type != "text/csv":
+                raise ValueError("CSV sources must use the text/csv media type")
         return self
 
 

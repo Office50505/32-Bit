@@ -1923,39 +1923,6 @@ select:focus-visible {
   font-size: 13px;
 }
 
-.source-hero__down {
-  position: absolute;
-  z-index: 3;
-  left: clamp(27px, 3.3vw, 52px);
-  bottom: 19px;
-  display: grid;
-  width: 57px;
-  height: 57px;
-  place-items: center;
-  background: linear-gradient(150deg, var(--pl-magenta), var(--pl-blue), var(--pl-cyan));
-  clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
-  color: var(--pl-ink);
-  text-decoration: none;
-  transition: transform 180ms ease;
-}
-
-.source-hero__down::before {
-  position: absolute;
-  inset: 1.5px;
-  content: "";
-  background: #f9fcff;
-  clip-path: inherit;
-}
-
-.source-hero__down svg {
-  position: relative;
-  z-index: 1;
-}
-
-.source-hero__down:hover {
-  transform: translateY(3px);
-}
-
 .source-path {
   display: grid;
   grid-template-columns: minmax(260px, 0.72fr) minmax(640px, 1.28fr);
@@ -2202,10 +2169,6 @@ select:focus-visible {
   .source-hero__molecule,
   .source-hero__molecule .molecule-3d {
     min-height: 400px;
-  }
-
-  .source-hero__down {
-    display: none;
   }
 
   .source-path,

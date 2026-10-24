@@ -114,6 +114,18 @@ The required checkpoint is [`molnextr_best.pth`](https://huggingface.co/datasets
 
 ### 2. Start the API
 
+Benzo's project-scoped molecular assistant uses fal's OpenRouter-compatible Chat Completions route.
+Keep the fal key on the backend only—copy `.env.example` to `.env` and add your key before starting
+the API:
+
+```bash
+cp .env.example .env
+# Edit .env and set FAL_KEY. Never commit the real key.
+set -a
+source .env
+set +a
+```
+
 ```bash
 .venv/bin/uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
@@ -186,6 +198,7 @@ FastAPI exposes interactive OpenAPI documentation at [http://localhost:8000/docs
 | `GET` | `/api/health` | Report service and chemistry-toolkit versions |
 | `POST` | `/api/analyze` | Validate and analyze one molecular structure |
 | `POST` | `/api/analyze/batch` | Analyze up to 100 structures in one request |
+| `POST` | `/api/benzo/chat` | Ask Benzo a project-scoped molecular or bond question |
 
 Example request:
 

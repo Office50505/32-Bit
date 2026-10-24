@@ -35,6 +35,7 @@ import { SourceReviewDialog } from "./SourceReviewDialog";
 import { SourceLanding } from "./SourceLanding";
 import { MoleculeStatusBadge } from "./StatusBadge";
 import { ValidationDesk } from "./ValidationDesk";
+import { parseCsvMolecule } from "./utils/csvMolecule";
 
 const steps: { id: StepId; label: string; detail: string }[] = [
   { id: "source", label: "Source", detail: "Upload or paste" },
@@ -44,7 +45,7 @@ const steps: { id: StepId; label: string; detail: string }[] = [
   { id: "report", label: "Report", detail: "PDF export" },
 ];
 
-type InputMode = "paper" | "photo" | "smiles";
+type InputMode = "csv" | "paper" | "photo" | "smiles";
 type BrowserSource = { file: File; url: string };
 
 function propertyValue(preview: AnalyzeResponse | null, key: string): string {
@@ -151,11 +152,14 @@ export default function App() {
     extractionAbortRef.current?.abort();
     const requestId = ++fileRequestRef.current;
     const isPaper = sourceMode === "paper";
+    const isCsv = sourceMode === "csv";
     const accepted = isPaper
       ? next.type === "application/pdf" || /\.pdf$/i.test(next.name)
-      : ["image/png", "image/jpeg", "image/webp"].includes(next.type);
+      : isCsv
+        ? ["text/csv", "application/csv", "application/vnd.ms-excel", ""].includes(next.type) && /\.csv$/i.test(next.name)
+        : ["image/png", "image/jpeg", "image/webp"].includes(next.type);
     if (!accepted) {
-      setFileError(isPaper ? "Choose a PDF file." : "Choose a PNG, JPEG, or WebP image.");
+      setFileError(isPaper ? "Choose a PDF file." : isCsv ? "Choose a CSV file." : "Choose a PNG, JPEG, or WebP image.");
       return;
     }
     setMode(sourceMode);
@@ -170,15 +174,16 @@ export default function App() {
     setFileHash(null);
     setImageExtraction(null);
     setExtractionStatus(null);
-    setExtractionMethod(isPaper ? "manual-smiles-transcription" : null);
-    if (!isPaper) {
+    setExtractionMethod(isPaper ? "manual-smiles-transcription" : isCsv ? "csv-smiles-column" : null);
+    if (!isPaper && !isCsv) {
       setDraftSmiles("");
       setExtracting(true);
     }
-    const extractionController = isPaper ? null : new AbortController();
+    const extractionController = isPaper || isCsv ? null : new AbortController();
     extractionAbortRef.current = extractionController;
     try {
-      const extractionPromise = isPaper ? null : prepareImageExtractionEngine({
+      const csvCandidate = isCsv ? parseCsvMolecule(await next.text()) : null;
+      const extractionPromise = isPaper || isCsv ? null : prepareImageExtractionEngine({
         signal: extractionController?.signal,
         onStatus: (status) => {
           if (requestId === fileRequestRef.current) setExtractionStatus(status);
@@ -189,6 +194,10 @@ export default function App() {
       if (requestId !== fileRequestRef.current) return;
       setFileHash(hash);
       setSourceFiles((current) => ({ ...current, [hash]: { file: next, url } }));
+      if (csvCandidate) {
+        setDraftSmiles(csvCandidate.smiles);
+        if (csvCandidate.label) setDraftLabel(csvCandidate.label);
+      }
       if (extractionPromise) {
         try {
           const extraction = await extractionPromise;
@@ -210,21 +219,26 @@ export default function App() {
           }
         }
       }
-    } catch {
+    } catch (error) {
       if (requestId !== fileRequestRef.current) return;
       URL.revokeObjectURL(url);
       setFile(null);
       setFileUrl(null);
       setExtracting(false);
       setExtractionStatus(null);
-      setFileError("This file could not be hashed. Choose it again before continuing.");
+      setFileError(
+        isCsv && error instanceof Error
+          ? error.message
+          : "This file could not be hashed. Choose it again before continuing.",
+      );
     }
   }
 
   function chooseLandingFile(next?: File) {
     if (!next) return;
     const isPaper = next.type === "application/pdf" || /\.pdf$/i.test(next.name);
-    void chooseFile(next, isPaper ? "paper" : "photo");
+    const isCsv = /\.csv$/i.test(next.name) || ["text/csv", "application/csv"].includes(next.type);
+    void chooseFile(next, isPaper ? "paper" : isCsv ? "csv" : "photo");
   }
 
   function navigate(next: StepId) {
@@ -239,7 +253,7 @@ export default function App() {
       return null;
     }
     if (mode !== "smiles" && (!file || !fileHash)) {
-      setActionError(`Choose and finish hashing the ${mode === "paper" ? "PDF" : "image"} source first.`);
+      setActionError(`Choose and finish hashing the ${mode === "paper" ? "PDF" : mode === "csv" ? "CSV" : "image"} source first.`);
       return null;
     }
     const label = draftLabel.trim() || undefined;
@@ -252,7 +266,7 @@ export default function App() {
       source: {
         source_type: mode,
         filename: file?.name,
-        media_type: file?.type,
+        media_type: mode === "csv" ? "text/csv" : file?.type,
         file_size: file?.size,
         file_sha256: fileHash ?? undefined,
         extraction_method: extractionMethod ?? "manual-smiles-transcription",
@@ -334,7 +348,7 @@ export default function App() {
     setDraftLabel(request.label ?? "");
     setDraftSmiles(request.structure);
     setDraftPage(request.source?.page?.toString() ?? "");
-    setMode(sourceType === "paper" || sourceType === "photo" ? sourceType : "smiles");
+    setMode(sourceType === "paper" || sourceType === "photo" || sourceType === "csv" ? sourceType : "smiles");
     setFile(selectedSource?.file ?? null);
     setFileUrl(selectedSource?.url ?? null);
     setFileHash(request.source?.file_sha256 ?? null);
@@ -373,6 +387,10 @@ export default function App() {
           : molecules.length
             ? `${molecules.length} structure${molecules.length === 1 ? "" : "s"} analyzed; ${validCount} computable and ${invalidCount} invalid.`
             : "Start with a SMILES string, image, or PDF source.";
+  const sourceEntryTitle = mode === "csv" ? "CSV SMILES entry" : "Direct SMILES entry";
+  const sourceEntryNote = mode === "csv" && file
+    ? `Imported from ${file.name}.`
+    : "No source document was attached to this record.";
 
   return <div className={`app-frame${step === "source" ? " app-frame--landing" : ""}`}>
     <header className={`site-chrome${mobileMenuOpen ? " site-chrome--open" : ""}`}>
@@ -397,7 +415,7 @@ export default function App() {
         {step === "source" ? <SourceLanding file={file} fileError={fileError} fileHash={fileHash} label={draftLabel} smiles={draftSmiles} onFileSelect={chooseLandingFile} onSmilesChange={(value) => { setDraftSmiles(value); setMode("smiles"); setActionError(""); }} onReview={() => void reviewCandidate()} /> : null}
 
 
-        {step === "confirm" && preview && <section className="confirmation-screen"><div className="section-head"><div><h2>Source and candidate</h2><p>Confirm the transcription only after comparing it with its source.</p></div><span className="section-kicker">02 / CONFIRM</span></div><div className="confirm-grid"><div className="source-preview"><div className="panel-title"><FileImage size={17} /><strong>Original source</strong><span>{file?.name ?? "Direct SMILES"}</span></div><div className="document-surface">{fileUrl && file?.type.startsWith("image/") ? <img src={fileUrl} alt={`Uploaded source ${file.name}`} /> : fileUrl && file?.type === "application/pdf" ? <iframe src={fileUrl} title={`Uploaded source ${file.name}`} /> : <div className="direct-source-preview"><Atom size={58} /><strong>Direct SMILES entry</strong><code>{draftSmiles}</code><small>No source document was attached to this record.</small></div>}</div></div>
+        {step === "confirm" && preview && <section className="confirmation-screen"><div className="section-head"><div><h2>Source and candidate</h2><p>Confirm the transcription only after comparing it with its source.</p></div><span className="section-kicker">02 / CONFIRM</span></div><div className="confirm-grid"><div className="source-preview"><div className="panel-title"><FileImage size={17} /><strong>Original source</strong><span>{file?.name ?? "Direct SMILES"}</span></div><div className="document-surface">{fileUrl && file?.type.startsWith("image/") ? <img src={fileUrl} alt={`Uploaded source ${file.name}`} /> : fileUrl && file?.type === "application/pdf" ? <iframe src={fileUrl} title={`Uploaded source ${file.name}`} /> : <div className="direct-source-preview"><Atom size={58} /><strong>{sourceEntryTitle}</strong><code>{draftSmiles}</code><small>{sourceEntryNote}</small></div>}</div></div>
           <div className="candidate-card"><div className="panel-title"><Atom size={18} /><strong>RDKit candidate</strong><MoleculeStatusBadge status={preview.status} compact /></div><div className="candidate-visual"><LiveMoleculeSvg svg={preview.depiction_svg} /></div><div className="candidate-facts"><div><span>Label</span><strong>{preview.label}</strong></div><div><span>Formula</span><strong>{propertyValue(preview, "molecular_formula")}</strong></div><div><span>Molecular weight</span><strong>{propertyValue(preview, "molecular_weight")}</strong></div><div className="candidate-smiles"><span>Submitted SMILES</span><code>{preview.raw_input}</code></div></div><p className={`candidate-warning candidate-warning--${preview.status}`}><AlertCircle size={17} /> {preview.issues[0]?.explanation ?? "No blocking issue was detected by the configured ruleset."}</p><div className="candidate-actions"><button className="button button--primary" disabled={confirming} onClick={() => void confirmCandidate()}><Check size={17} />{confirming ? "Saving run…" : editingIndex === null ? "Confirm and add to run" : "Confirm changes"}</button><button className="button button--quiet" onClick={() => setStep("source")}><Pencil size={17} /> Edit input</button><button className="button button--danger" onClick={() => { setPreview(null); setDraftSmiles(""); setStep("source"); }}><X size={16} /> Reject candidate</button></div></div></div></section>}
 
         {(step === "validate" || step === "compare") && (selected ? <ValidationDesk step={step} molecules={molecules} selected={selected} filtered={filtered} search={search} onSearch={setSearch} onSelect={setSelectedId} onAddSource={() => { clearDraft(); setStep("source"); }} onEdit={editReviewedCandidate} onReviewSource={() => sourceDialogRef.current?.showModal()} /> : <div className="empty-run panel"><div><strong>No analyzed structures yet.</strong><span>Submit a source to create the first real run record.</span></div><button className="button button--primary" onClick={() => setStep("source")}>Add a molecular source</button></div>)}
@@ -406,6 +424,6 @@ export default function App() {
       </main></div>
 
     {selected ? <SourceReviewDialog dialogRef={sourceDialogRef} molecule={selected} sourceUrl={selectedSource?.url ?? null} sourceFile={selectedSource?.file ?? null} sourceHash={selected.sourceFileSha256 ?? null} onReject={() => void rejectReviewedCandidate()} onEdit={editReviewedCandidate} onConfirm={() => sourceDialogRef.current?.close()} /> : null}
-    <BenzoAssistant />
+    <BenzoAssistant currentSmiles={draftSmiles.trim() || selected?.smiles || null} />
   </div>;
 }

@@ -60,3 +60,21 @@ def test_photo_source_metadata_is_preserved_and_hashed() -> None:
 
     direct = analyze("CCO", "Ethanol")
     assert result["manifest"]["input_sha256"] != direct["manifest"]["input_sha256"]
+
+
+def test_csv_source_metadata_is_preserved() -> None:
+    source = {
+        "source_type": "csv",
+        "filename": "molecules.csv",
+        "media_type": "text/csv",
+        "file_size": 128,
+        "file_sha256": "b" * 64,
+        "extraction_method": "csv-smiles-column",
+    }
+    response = client.post(
+        "/api/analyze",
+        json={"structure": "CCO", "label": "Ethanol", "source": source},
+    )
+
+    assert response.status_code == 200
+    assert all(response.json()["source"][key] == value for key, value in source.items())
