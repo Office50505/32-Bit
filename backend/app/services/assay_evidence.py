@@ -35,7 +35,7 @@ _UNIT_TO_MOLAR = {
 }
 _VALID_RELATIONS = {"=", "<", ">", "<=", ">="}
 _ACTIVE_OUTCOMES = {"active", "agonist", "antagonist", "inhibitor", "positive"}
-_INACTIVE_OUTCOMES = {"inactive", "inconclusive", "negative", "not active"}
+_INACTIVE_OUTCOMES = {"inactive", "negative", "not active"}
 _NEGATED_ACTIVITY = re.compile(
     r"\b(?:does\s+not|doesn't|did\s+not|is\s+not|fails?\s+to)\s+"
     r"(?:inhibit|activate|bind)\b|\binactive\b",

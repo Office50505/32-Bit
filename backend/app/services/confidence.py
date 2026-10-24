@@ -6,6 +6,7 @@ from app.models.evidence_assistant import (
     EvidenceDirectness,
     EvidenceItem,
     EvidencePacket,
+    EvidenceSourceType,
     ResolutionStatus,
     RetractionStatus,
 )
@@ -103,6 +104,8 @@ def _target_confidence_score(items: list[EvidenceItem]) -> float:
         raw_score = item.assay_conditions.get("target_confidence_score")
         if isinstance(raw_score, int | float):
             scores.append(max(0.0, min(1.0, float(raw_score) / 9.0)))
+        elif item.source_type == EvidenceSourceType.RUN_RECORD:
+            scores.append(1.0)
         elif item.target_id is not None:
             scores.append(0.6)
         else:
@@ -113,16 +116,20 @@ def _target_confidence_score(items: list[EvidenceItem]) -> float:
 def _independence_score(items: list[EvidenceItem]) -> float:
     if not items:
         return 0.0
-    sources = {
-        (
-            item.source_type.value,
-            item.paper_id or str(item.assay_conditions.get("assay_id") or item.source_record_id),
-        )
-        for item in items
-    }
+    sources = {_independence_key(item) for item in items}
     if len(sources) >= 2:
         return 1.0
     return 0.5
+
+
+def _independence_key(item: EvidenceItem) -> tuple[str, str]:
+    if item.paper_id:
+        return "paper", item.paper_id
+    if item.source_type == EvidenceSourceType.RUN_RECORD:
+        analysis_id = str(item.assay_conditions.get("analysis_id") or item.source_record_id)
+        return "run", analysis_id
+    assay_id = str(item.assay_conditions.get("assay_id") or item.source_record_id)
+    return item.source_type.value, assay_id
 
 
 def _agreement_score(packet: EvidencePacket) -> float:

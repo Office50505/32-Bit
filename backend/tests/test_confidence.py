@@ -124,3 +124,14 @@ def test_abstention_without_evidence_is_low_confidence() -> None:
     )
     result = materialize_statement_verdict(empty_packet, proposal)
     assert result.confidence.level == ConfidenceLevel.LOW
+
+
+def test_same_paper_records_do_not_count_as_independent_sources() -> None:
+    first = item("1", paper_id="P1")
+    second = item("2", paper_id="P1")
+    confidence = assess_confidence(
+        packet(first, second),
+        [first.evidence_id, second.evidence_id],
+    )
+    assert confidence.level == ConfidenceLevel.MEDIUM
+    assert confidence.factor_scores["source_independence"] == 0.5

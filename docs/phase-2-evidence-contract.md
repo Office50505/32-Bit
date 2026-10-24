@@ -1,10 +1,11 @@
 # ProvenanceLab Phase 2 evidence-assistant contract
 
-**Contract status:** initial implementation contract; scientific-review approval is pending.  
-**Scope:** typed claim decomposition, evidence packets, deterministic verdict validation, and
-research-aid output labelling.  
-**Non-goal in this increment:** live ChEMBL/PubChem ingestion, dense passage retrieval, Ollama
-calls, confidence calibration, and the 150-claim evaluation.
+**Contract status:** working implementation contract; scientific-review approval is pending.
+**Scope:** typed claim decomposition, structured assay/run/passage evidence packets, assay
+comparison, deterministic verdict validation, fail-closed local-model orchestration, confidence
+scoring, and research-aid output labelling.
+**Not yet complete:** frozen PubChem/PMC/retraction imports, reviewed pilot scope, passage
+entailment, API/UI exposure, and the locked 150-claim evaluation.
 
 ## 1. Authority boundary
 
@@ -44,13 +45,15 @@ to satisfy a UI field.
 - `REINSTATED`: is not treated as retracted after the frozen record verifies reinstatement.
 - `UNKNOWN`: emits a warning and limits confidence.
 
-## 4. Initial disagreement policy
+## 4. Assay disagreement policy
 
-The initial validator refuses `SUPPORTED` when the cited direct evidence includes a direct
-contradiction. The later assay-comparability engine may distinguish compatible from incompatible
-assays, but it must do so using typed dimensions such as molecule parent, target, organism,
-endpoint, assay type, units, relation operator, and experimental context. Until then, direct
-disagreement forces abstention rather than an LLM-selected winner.
+The assay-comparability engine normalizes supported molar units, preserves censor operators, and
+compares molecule parent, target, organism, endpoint, assay type, and typed experimental context.
+Opposite stances under matching typed context create a decision conflict and force abstention.
+Opposite stances under different context are reported as contextual disagreement but are not
+silently treated as a direct contradiction. Ten-fold numeric divergence is surfaced even when it
+does not change the qualitative statement verdict. The model cannot select a winner when the
+deterministic layer identifies a comparable direct conflict.
 
 ## 5. Confidence contract
 
@@ -58,9 +61,13 @@ Confidence is `HIGH`, `MEDIUM`, or `LOW` and must be produced by a versioned det
 calibration method. The model does not emit a percentage. Benchmark accuracy and case count are
 reported together only after they are measured on the frozen evaluation set.
 
-Planned factors are entity-match certainty, evidence directness, assay-target confidence, source
+Version 1 factors are entity-match certainty, evidence directness, assay-target confidence, source
 independence, comparable-assay agreement, measurement flags, citation validity, retraction status,
-and retrieval margin.
+and direct-evidence coverage. A score of at least 0.86 reaches `HIGH` only when at least two usable
+direct records from independent papers or assays are present and retraction status is sufficiently
+known. A single source is capped at `MEDIUM`; rejected model output is capped at `LOW`. These are
+engineering thresholds, not calibrated probabilities, until the frozen evaluation set supplies
+per-band accuracy and case count.
 
 ## 6. Reproducibility fields
 
@@ -110,12 +117,27 @@ over canonical snapshot metadata and every normalized source row. FTS rows are d
 and are therefore excluded from that content digest. A sealed snapshot rejects further builder
 writes, and runtime startup can verify its digest before serving claims.
 
+The orchestration layer verifies every snapshot hash and the pinned Ollama model identity before
+accepting work. Deterministic routing can override a bad model claim-type label. Comparable assay
+conflicts and no-direct-evidence cases bypass model verdict selection. If the model invents a
+citation or proposes a forbidden verdict, the output becomes `INSUFFICIENT_EVIDENCE` with
+`MODEL_OUTPUT_REJECTED` and low confidence. The response manifest hashes the request,
+configuration, frozen snapshot identities, and verdict payload.
+
+Paper retrieval is deliberately conservative in the current increment. FTS5 returns an exact
+paper ID, section/paragraph/character locator, passage text, passage hash, and retraction status,
+but the passage is labelled `CONTEXT_ONLY` and neutral until a passage-entailment method has been
+evaluated. This prevents lexical retrieval alone from turning prose into a supported mechanism.
+
 ## 8. Next implementation gate
 
 Before an API endpoint is exposed, the project must add:
 
-1. selected PubChem/PMC import adapters that preserve raw records;
-2. higher-level molecule and target resolution with explicit ambiguity stops;
-3. claim-routing orchestration around the pinned Ollama structured-output adapter;
-4. a deterministic confidence implementation backed by benchmark calibration; and
-5. integration tests proving that retrieved citations resolve to the sealed pilot snapshot.
+1. selected PubChem/PMC import adapters and a frozen retraction index that preserve raw records;
+2. a reviewed pilot selection derived from (but kept separate from) the 150 evaluation claims;
+3. a benchmarked passage-entailment step or an explicit decision to keep literature claims
+   abstention-only;
+4. confidence calibration and a retrieval-plus-LLM baseline on the locked 150-claim set;
+5. integration tests against the real sealed pilot snapshot, including citation resolution; and
+6. latency profiling and an operational decision about the current Qwen/Ollama combination, which
+   has not met the under-ten-second warm target in local experiments.

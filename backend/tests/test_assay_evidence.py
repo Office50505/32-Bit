@@ -174,6 +174,15 @@ def test_nanomolar_claim_is_evaluated_against_typed_measurement() -> None:
     ) == EvidenceStance.CONTRADICTS
 
 
+def test_inconclusive_outcome_is_not_mislabelled_as_contradiction() -> None:
+    constraint = parse_activity_constraint(statement("Imatinib inhibits ABL1."))
+    assert stance_for_measurement(
+        constraint,
+        interval=None,
+        activity_outcome="Inconclusive",
+    ) == EvidenceStance.NEUTRAL
+
+
 def test_packet_builder_creates_traceable_assay_citation(store: EvidenceStore) -> None:
     add_activity(store, suffix="1", value=42)
     packet = build_packet(store)
