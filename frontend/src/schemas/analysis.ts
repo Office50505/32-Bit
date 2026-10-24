@@ -40,6 +40,7 @@ export interface IssueLocation {
 
 export interface ValidationIssue {
   code: string;
+  subcode?: string | null;
   title: string;
   severity: Severity;
   summary: string;
@@ -56,6 +57,9 @@ export interface StandardizationStep {
   before_smiles: string;
   after_smiles: string;
   changed: boolean;
+  status: "applied" | "failed";
+  reason_code?: string | null;
+  reason?: string | null;
 }
 
 export interface PropertyObservation {
@@ -107,4 +111,39 @@ export interface AnalyzeResponse {
 
 export interface BatchAnalyzeResponse {
   results: AnalyzeResponse[];
+}
+
+export interface RunResponse extends BatchAnalyzeResponse {
+  run_id: string;
+  input_sha256: string;
+  configuration_sha256: string;
+  output_sha256: string;
+}
+
+export interface ApiErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    field?: string | null;
+    technical_detail?: string | null;
+  };
+}
+
+export interface TokenConfidence {
+  token: string;
+  confidence: number;
+}
+
+export interface ImageExtractionResponse {
+  status: "candidate";
+  candidate_smiles: string;
+  method: "DECIMER-Image-Transformer";
+  model_version: string;
+  source_sha256: string;
+  filename: string;
+  media_type: "image/png" | "image/jpeg" | "image/webp";
+  confidence_mean?: number | null;
+  confidence_min?: number | null;
+  token_confidences: TokenConfidence[];
+  warnings: string[];
 }

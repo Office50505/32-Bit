@@ -8,9 +8,13 @@ version = "0.1.0"
 description = "Deterministic molecular validation API for ProvenanceLab"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+  "decimer>=2.8,<3",
   "fastapi>=0.118,<1",
+  "pillow>=11,<13",
   "pydantic>=2.11,<3",
+  "python-multipart>=0.0.20,<1",
   "rdkit>=2025.3.1",
+  "reportlab>=4.4,<5",
   "uvicorn[standard]>=0.37,<1",
 ]
 

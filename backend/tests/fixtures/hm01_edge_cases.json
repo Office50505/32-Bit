@@ -1,0 +1,254 @@
+[
+  {
+    "id": "invalid-unclosed-ring",
+    "category": "syntax",
+    "smiles": "C1CC",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "Ring closure digit is never completed."
+  },
+  {
+    "id": "invalid-unclosed-branch",
+    "category": "syntax",
+    "smiles": "CC(",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "Branch opening parenthesis has no closing partner."
+  },
+  {
+    "id": "invalid-duplicate-bond",
+    "category": "syntax",
+    "smiles": "C==C",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "Two consecutive bond symbols cannot describe one connection."
+  },
+  {
+    "id": "invalid-unclosed-bracket",
+    "category": "syntax",
+    "smiles": "[C",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "Bracket atom is incomplete."
+  },
+  {
+    "id": "invalid-empty-component",
+    "category": "syntax",
+    "smiles": "C..C",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "Two fragment separators create an empty component."
+  },
+  {
+    "id": "invalid-unknown-element",
+    "category": "syntax",
+    "smiles": "Q",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "Q is not a valid unbracketed element symbol."
+  },
+  {
+    "id": "invalid-extra-parenthesis",
+    "category": "syntax",
+    "smiles": "C1CC1)",
+    "expected_status": "invalid",
+    "expected_issue": "SMILES_SYNTAX_ERROR",
+    "description": "The closing parenthesis has no opening partner."
+  },
+  {
+    "id": "invalid-oxygen-valence",
+    "category": "valence",
+    "smiles": "C[O](C)C",
+    "expected_status": "invalid",
+    "expected_issue": "IMPOSSIBLE_VALENCE",
+    "description": "Neutral oxygen is assigned three single bonds."
+  },
+  {
+    "id": "invalid-carbon-valence",
+    "category": "valence",
+    "smiles": "C(C)(C)(C)(C)C",
+    "expected_status": "invalid",
+    "expected_issue": "IMPOSSIBLE_VALENCE",
+    "description": "Neutral carbon is assigned five single bonds."
+  },
+  {
+    "id": "invalid-nitrogen-valence",
+    "category": "valence",
+    "smiles": "CN(C)(C)C",
+    "expected_status": "invalid",
+    "expected_issue": "IMPOSSIBLE_VALENCE",
+    "description": "Neutral nitrogen is assigned four single bonds without a positive charge."
+  },
+  {
+    "id": "invalid-alkyne-valence",
+    "category": "valence",
+    "smiles": "C#C#C",
+    "expected_status": "invalid",
+    "expected_issue": "IMPOSSIBLE_VALENCE",
+    "description": "The middle carbon is assigned two triple bonds."
+  },
+  {
+    "id": "invalid-non-kekule-carbon-ring",
+    "category": "aromaticity",
+    "smiles": "c1cccc1",
+    "expected_status": "invalid",
+    "expected_issue": "AROMATICITY_ERROR",
+    "description": "Five aromatic carbon atoms cannot be kekulized as written."
+  },
+  {
+    "id": "invalid-non-kekule-nitrogen-ring",
+    "category": "aromaticity",
+    "smiles": "c1nccc1",
+    "expected_status": "invalid",
+    "expected_issue": "AROMATICITY_ERROR",
+    "description": "The aromatic heterocycle cannot be kekulized as written."
+  },
+  {
+    "id": "invalid-wildcard-atom",
+    "category": "incomplete-identity",
+    "smiles": "*CC",
+    "expected_status": "invalid",
+    "expected_issue": "UNSPECIFIED_ATOM",
+    "description": "A wildcard does not define the molecular composition."
+  },
+  {
+    "id": "ambiguous-butan-2-ol",
+    "category": "tetrahedral-stereochemistry",
+    "smiles": "CCC(O)C",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "The alcohol stereocentre has no R/S assignment."
+  },
+  {
+    "id": "ambiguous-lactic-acid",
+    "category": "tetrahedral-stereochemistry",
+    "smiles": "CC(O)C(=O)O",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "The alpha carbon has no R/S assignment."
+  },
+  {
+    "id": "ambiguous-alanine",
+    "category": "tetrahedral-stereochemistry",
+    "smiles": "NC(C)C(=O)O",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "The amino-acid alpha carbon has no R/S assignment."
+  },
+  {
+    "id": "ambiguous-halogen-centre",
+    "category": "tetrahedral-stereochemistry",
+    "smiles": "CC(F)Cl",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "The carbon bearing fluorine and chlorine has no R/S assignment."
+  },
+  {
+    "id": "ambiguous-branched-alcohol",
+    "category": "tetrahedral-stereochemistry",
+    "smiles": "CC(C)C(O)C",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "The secondary alcohol stereocentre is unassigned."
+  },
+  {
+    "id": "ambiguous-but-2-ene",
+    "category": "double-bond-stereochemistry",
+    "smiles": "CC=CC",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "A stereogenic double bond has no E/Z assignment."
+  },
+  {
+    "id": "ambiguous-difluoroethene",
+    "category": "double-bond-stereochemistry",
+    "smiles": "FC=CF",
+    "expected_status": "ambiguous",
+    "expected_issue": "UNSPECIFIED_STEREOCHEMISTRY",
+    "description": "The fluorinated double bond has no E/Z assignment."
+  },
+  {
+    "id": "valid-specified-trans-alkene",
+    "category": "specified-stereochemistry",
+    "smiles": "C/C=C/C",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "description": "Double-bond stereochemistry is explicitly specified."
+  },
+  {
+    "id": "valid-specified-alcohol-centre",
+    "category": "specified-stereochemistry",
+    "smiles": "C[C@H](O)CC",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "description": "The alcohol stereocentre has an explicit configuration."
+  },
+  {
+    "id": "valid-specified-alanine",
+    "category": "specified-stereochemistry",
+    "smiles": "N[C@@H](C)C(=O)O",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "description": "The amino-acid stereocentre has an explicit configuration."
+  },
+  {
+    "id": "valid-sodium-acetate",
+    "category": "salt",
+    "smiles": "CC(=O)[O-].[Na+]",
+    "expected_status": "valid",
+    "expected_issue": "MULTIPLE_FRAGMENTS",
+    "expect_standardization_change": true,
+    "description": "The salt contains an organic parent and sodium counterion."
+  },
+  {
+    "id": "valid-trimethylammonium-chloride",
+    "category": "salt",
+    "smiles": "C[NH+](C)C.[Cl-]",
+    "expected_status": "valid",
+    "expected_issue": "MULTIPLE_FRAGMENTS",
+    "expect_standardization_change": true,
+    "description": "The charged organic component is accompanied by chloride."
+  },
+  {
+    "id": "valid-ethanol-hydrate",
+    "category": "solvate",
+    "smiles": "CCO.O",
+    "expected_status": "valid",
+    "expected_issue": "MULTIPLE_FRAGMENTS",
+    "expect_standardization_change": true,
+    "description": "A disconnected water component must be recorded and removed from the parent."
+  },
+  {
+    "id": "valid-pyridone-tautomer",
+    "category": "tautomer",
+    "smiles": "O=c1[nH]cccc1",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "description": "A tautomerizable heterocycle remains chemically valid."
+  },
+  {
+    "id": "valid-nitromethane",
+    "category": "charge-separated-group",
+    "smiles": "C[N+](=O)[O-]",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "description": "The nitro group uses a valid charge-separated representation."
+  },
+  {
+    "id": "valid-glycine-zwitterion",
+    "category": "zwitterion",
+    "smiles": "[NH3+]CC(=O)[O-]",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "expect_standardization_change": true,
+    "description": "Opposing formal charges form a valid zwitterionic input."
+  },
+  {
+    "id": "valid-carbon-13-ethanol",
+    "category": "isotope",
+    "smiles": "[13CH3]CO",
+    "expected_status": "valid",
+    "expected_issue": null,
+    "description": "An explicitly labelled isotope must be retained."
+  }
+]

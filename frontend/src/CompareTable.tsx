@@ -14,7 +14,7 @@ export function CompareTable({ molecules, brief = false }: { molecules: Molecule
         <p className="mt-1 text-[11px] leading-relaxed text-slate-500">Computed results and reference evidence remain separate for each molecule.</p>
       </div>
       <span className="rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-800">
-        Demo bootstrap evidence · ChEMBL 37 not configured
+        Frozen reference snapshot: {comparable[0]?.manifest.snapshotId ?? "not configured"}
       </span>
     </div>
     <div className="table-scroll">
@@ -44,7 +44,7 @@ export function CompareTable({ molecules, brief = false }: { molecules: Molecule
             return [
               <td key={`${molecule.id}-computed`}>{descriptor.value === null ? "—" : `${descriptor.value}${descriptor.unit ? ` ${descriptor.unit}` : ""}`}</td>,
               <td key={`${molecule.id}-evidence`} className="table-muted">{descriptor.reference === null ? "—" : `${descriptor.reference}${descriptor.unit ? ` ${descriptor.unit}` : ""}`}</td>,
-              <td key={`${molecule.id}-status`}><EvidenceStatusBadge status={descriptor.status} /></td>,
+              <td key={`${molecule.id}-status`}><EvidenceStatusBadge status={descriptor.status} /><small className="cell-reason">{descriptor.reason}</small></td>,
             ];
           })}
         </tr>)}</tbody>

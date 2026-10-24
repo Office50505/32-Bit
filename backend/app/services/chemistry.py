@@ -1,7 +1,8 @@
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from rdkit import Chem
+from rdkit import Chem, rdBase
 from rdkit.Chem import Crippen, Descriptors, Lipinski, rdDepictor, rdMolDescriptors
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem.MolStandardize import rdMolStandardize
@@ -110,7 +111,84 @@ ISSUE_CONTENT = {
         ),
         "next_step": "Review the submitted charges, bonds, aromaticity, and atom specification.",
     },
+    "RESOURCE_LIMIT_EXCEEDED": {
+        "title": "Structure exceeds the analysis limit",
+        "summary": "The molecular graph is too large or fragmented for this analysis profile.",
+        "explanation": (
+            "The structure parsed, but it exceeded a declared safety limit before expensive "
+            "standardization or descriptor calculation began."
+        ),
+        "why_it_matters": (
+            "Bounded inputs keep validation responsive and prevent one record from exhausting "
+            "the analysis service."
+        ),
+        "next_step": "Submit one molecular entity at a time or reduce the source structure.",
+    },
 }
+
+MAX_ATOMS = 2_000
+MAX_FRAGMENTS = 100
+RING_TOKEN = re.compile(r"%(?:\d{2})|\d")
+INVALID_BOND_SEQUENCE = re.compile(r"(?:^|[.()])[-=#$:/\\]|[-=#$:/\\]{2,}")
+
+
+def _syntax_issue(smiles: str) -> ValidationIssue:
+    subcode = "UNPARSEABLE_SMILES"
+    title = ISSUE_CONTENT["SMILES_SYNTAX_ERROR"]["title"]
+    detail = "RDKit returned no molecular graph."
+    start: int | None = None
+    end: int | None = None
+
+    if smiles.count("[") != smiles.count("]"):
+        subcode = "UNMATCHED_BRACKET"
+        title = "Unmatched square bracket"
+        detail = "A bracketed atom expression is missing an opening or closing bracket."
+        start = max(smiles.rfind("["), smiles.rfind("]"), 0)
+        end = min(len(smiles), start + 1)
+    elif smiles.count("(") != smiles.count(")"):
+        subcode = "UNMATCHED_BRANCH"
+        title = "Unmatched branch parenthesis"
+        detail = "A SMILES branch is missing an opening or closing parenthesis."
+        start = max(smiles.rfind("("), smiles.rfind(")"), 0)
+        end = min(len(smiles), start + 1)
+    else:
+        ring_tokens = RING_TOKEN.findall(smiles)
+        unmatched_ring = next(
+            (token for token in dict.fromkeys(ring_tokens) if ring_tokens.count(token) % 2),
+            None,
+        )
+        bond_match = INVALID_BOND_SEQUENCE.search(smiles)
+        invalid_atom = re.search(r"(?<![A-Za-z])Q(?![a-z])", smiles)
+        if unmatched_ring is not None:
+            subcode = "UNCLOSED_RING"
+            title = "Unclosed ring"
+            detail = f"Ring label {unmatched_ring} does not have a matching closure."
+            start = smiles.find(unmatched_ring)
+            end = start + len(unmatched_ring)
+        elif bond_match is not None:
+            subcode = "INVALID_BOND_SEQUENCE"
+            title = "Invalid bond placement"
+            detail = "A bond symbol is misplaced or conflicts with an adjacent bond symbol."
+            start, end = bond_match.span()
+        elif invalid_atom is not None:
+            subcode = "INVALID_ATOM_TOKEN"
+            title = "Unknown atom token"
+            detail = "The token Q is not a valid unbracketed SMILES element symbol."
+            start, end = invalid_atom.span()
+
+    content = ISSUE_CONTENT["SMILES_SYNTAX_ERROR"]
+    return ValidationIssue(
+        code="SMILES_SYNTAX_ERROR",
+        subcode=subcode,
+        title=title,
+        severity=Severity.ERROR,
+        summary=content["summary"],
+        explanation=detail,
+        why_it_matters=content["why_it_matters"],
+        next_step=content["next_step"],
+        location=IssueLocation(smiles_start=start, smiles_end=end),
+        technical_detail=detail,
+    )
 
 
 def _invalid_issue(
@@ -176,26 +254,66 @@ def _sanitization_issue(
 def _parse_and_validate(
     smiles: str,
 ) -> tuple[Chem.Mol | None, list[ValidationIssue], Chem.Mol | None]:
-    try:
-        raw_mol = Chem.MolFromSmiles(smiles, sanitize=False)
-    except Exception:
-        raw_mol = None
+    with rdBase.BlockLogs():
+        try:
+            raw_mol = Chem.MolFromSmiles(smiles, sanitize=False)
+        except Exception:
+            raw_mol = None
     if raw_mol is None:
+        return None, [_syntax_issue(smiles)], None
+
+    atom_count = raw_mol.GetNumAtoms()
+    fragment_count = len(Chem.GetMolFrags(raw_mol, sanitizeFrags=False))
+    if atom_count > MAX_ATOMS or fragment_count > MAX_FRAGMENTS:
+        detail = (
+            f"Parsed graph contains {atom_count} atoms and {fragment_count} fragments; "
+            f"limits are {MAX_ATOMS} atoms and {MAX_FRAGMENTS} fragments."
+        )
         return (
             None,
-            [_invalid_issue("SMILES_SYNTAX_ERROR", "RDKit returned no molecular graph.")],
-            None,
+            [_invalid_issue("RESOURCE_LIMIT_EXCEEDED", detail)],
+            raw_mol,
         )
 
-    try:
-        problems = list(Chem.DetectChemistryProblems(raw_mol))
-        sanitization_failure = Chem.SanitizeMol(raw_mol, catchErrors=True)
-    except Exception as exc:
-        issue = _invalid_issue(
-            "SANITIZATION_ERROR",
-            f"RDKit sanitization raised {type(exc).__name__}.",
+    unspecified_atoms = [atom.GetIdx() for atom in raw_mol.GetAtoms() if atom.GetAtomicNum() == 0]
+    if unspecified_atoms:
+        human_atoms = ", ".join(str(index + 1) for index in unspecified_atoms)
+        return (
+            None,
+            [
+                ValidationIssue(
+                    code="UNSPECIFIED_ATOM",
+                    title="Unspecified atom",
+                    severity=Severity.ERROR,
+                    summary="The structure contains a wildcard or query atom.",
+                    explanation=(
+                        f"Atom(s) {human_atoms} do not identify a chemical element, so the "
+                        "molecular composition is incomplete."
+                    ),
+                    why_it_matters=(
+                        "Properties such as formula, mass, and hydrogen-bond counts require every "
+                        "atom to be defined."
+                    ),
+                    next_step=(
+                        "Replace each wildcard (*) with the element shown in the source, or mark "
+                        "the record as an unresolved generic structure."
+                    ),
+                    location=IssueLocation(atom_indices=unspecified_atoms),
+                )
+            ],
+            raw_mol,
         )
-        return None, [issue], raw_mol
+
+    with rdBase.BlockLogs():
+        try:
+            problems = list(Chem.DetectChemistryProblems(raw_mol))
+            sanitization_failure = Chem.SanitizeMol(raw_mol, catchErrors=True)
+        except Exception as exc:
+            issue = _invalid_issue(
+                "SANITIZATION_ERROR",
+                f"RDKit sanitization raised {type(exc).__name__}.",
+            )
+            return None, [issue], raw_mol
     if sanitization_failure != Chem.SanitizeFlags.SANITIZE_NONE:
         return None, [_sanitization_issue(problems, sanitization_failure)], raw_mol
 
@@ -262,13 +380,14 @@ def _parse_and_validate(
 
 
 def _standardization_functions() -> dict[str, Callable[[Chem.Mol], Chem.Mol]]:
+    tautomer_enumerator = rdMolStandardize.TautomerEnumerator()
+    tautomer_enumerator.SetRemoveSp3Stereo(False)
+    tautomer_enumerator.SetRemoveBondStereo(False)
     return {
         "CLEANUP": rdMolStandardize.Cleanup,
         "FRAGMENT_PARENT": rdMolStandardize.FragmentParent,
         "UNCHARGE": lambda molecule: rdMolStandardize.Uncharger().uncharge(molecule),
-        "CANONICAL_TAUTOMER": (
-            lambda molecule: rdMolStandardize.TautomerEnumerator().Canonicalize(molecule)
-        ),
+        "CANONICAL_TAUTOMER": tautomer_enumerator.Canonicalize,
     }
 
 

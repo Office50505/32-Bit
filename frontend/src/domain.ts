@@ -1,10 +1,11 @@
 export type MoleculeStatus = "valid" | "ambiguous" | "invalid";
-export type EvidenceStatus = "MATCH" | "DIFFERENCE" | "NOT_AVAILABLE" | "OUTSIDE_SNAPSHOT_COVERAGE" | "NOT_APPLICABLE" | "NOT_COMPUTED";
+export type EvidenceStatus = "MATCH" | "DIFFERENCE" | "NOT_AVAILABLE" | "OUTSIDE_SNAPSHOT_COVERAGE" | "NOT_APPLICABLE" | "NO_REFERENCE_MATCH" | "AMBIGUOUS_INPUT" | "NOT_COMPUTED";
 export type StepId = "source" | "confirm" | "validate" | "compare" | "report";
 export type AuditTab = "validation" | "standardization" | "properties" | "evidence" | "provenance";
 
 export interface ValidationIssue {
   code: string;
+  subcode?: string | null;
   title: string;
   explanation: string;
   whyItMatters: string;
@@ -12,6 +13,7 @@ export interface ValidationIssue {
   atomIndex?: number;
   severity: "error" | "warning" | "info";
 }
+
 export interface StandardizationStep {
   code: string;
   label: string;
@@ -32,12 +34,11 @@ export interface DescriptorRecord {
 
 export interface ProvenanceManifest {
   analysisId: string;
-  inputSha256: string | null;
-  outputSha256: string | null;
-  configurationSha256: string | null;
-  rdkitVersion: string | null;
+  inputSha256: string;
+  outputSha256: string;
+  configurationSha256: string;
+  rdkitVersion: string;
   snapshotId: string;
-  mode: "demo" | "live";
 }
 
 export interface MoleculeCandidate {
@@ -49,10 +50,12 @@ export interface MoleculeCandidate {
   status: MoleculeStatus;
   source: string;
   issue: ValidationIssue | null;
+  issues: ValidationIssue[];
   steps: StandardizationStep[];
   descriptors: DescriptorRecord[];
   manifest: ProvenanceManifest;
   confirmed: boolean;
   depictionSvg?: string | null;
   sourceFileSha256?: string | null;
+  inputIndex: number;
 }

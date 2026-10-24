@@ -12,19 +12,22 @@ frontend/coverage/
 # Backend
 .venv/
 backend/.venv/
-__pycache__/
+**/__pycache__/
 *.py[cod]
+*.egg-info/
+backend/.pytest_cache/
 .pytest_cache/
 .ruff_cache/
-*.egg-info/
 .coverage
 
 # Local data and run artifacts
+.data/
 data/raw/
 data/processed/
 runs/
 uploads/
 tmp/
+output/.DS_Store
 
 # IDEs
 .idea/

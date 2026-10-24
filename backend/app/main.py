@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import router
+from app.services.image_recognition import ImageRecognitionError
 
 app = FastAPI(
     title="ProvenanceLab API",
@@ -18,3 +21,75 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.exception_handler(ImageRecognitionError)
+async def image_recognition_error(
+    _request: Request,
+    exception: ImageRecognitionError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exception.status_code,
+        content={
+            "error": {
+                "code": exception.code,
+                "message": exception.message,
+                "field": "image",
+                "technical_detail": exception.technical_detail,
+            }
+        },
+    )
+
+
+def _validation_error_code(field: str, error_type: str) -> str:
+    if field.endswith("structure"):
+        if error_type == "string_too_short" or error_type == "value_error":
+            return "EMPTY_STRUCTURE"
+        if error_type == "string_too_long":
+            return "STRUCTURE_TOO_LONG"
+    if field.endswith("input_type") or error_type == "literal_error":
+        return "UNSUPPORTED_INPUT_FORMAT"
+    if field.endswith("molecules"):
+        return "INVALID_BATCH_SIZE"
+    if "source" in field:
+        return "INVALID_SOURCE_METADATA"
+    if error_type == "extra_forbidden":
+        return "UNKNOWN_REQUEST_FIELD"
+    return "REQUEST_VALIDATION_ERROR"
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(
+    _request: Request,
+    exception: RequestValidationError,
+) -> JSONResponse:
+    first = exception.errors()[0]
+    field = ".".join(str(part) for part in first.get("loc", ()) if part != "body") or None
+    error_type = str(first.get("type", "request_validation_error"))
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": _validation_error_code(field or "", error_type),
+                "message": str(first.get("msg", "The request is invalid.")),
+                "field": field,
+                "technical_detail": error_type,
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_error(_request: Request, exception: HTTPException) -> JSONResponse:
+    code = "RUN_NOT_FOUND" if exception.status_code == 404 else "HTTP_ERROR"
+    return JSONResponse(
+        status_code=exception.status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": str(exception.detail),
+                "field": None,
+                "technical_detail": None,
+            }
+        },
+    )

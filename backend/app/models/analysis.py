@@ -1,7 +1,11 @@
 from enum import StrEnum
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class ApiModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class Severity(StrEnum):
@@ -29,15 +33,16 @@ class ResultStatus(StrEnum):
     CONFLICTING_EVIDENCE = "CONFLICTING_EVIDENCE"
 
 
-class IssueLocation(BaseModel):
+class IssueLocation(ApiModel):
     atom_indices: list[int] = Field(default_factory=list)
     bond_indices: list[int] = Field(default_factory=list)
     smiles_start: int | None = None
     smiles_end: int | None = None
 
 
-class ValidationIssue(BaseModel):
+class ValidationIssue(ApiModel):
     code: str
+    subcode: str | None = None
     title: str
     severity: Severity
     summary: str
@@ -48,7 +53,7 @@ class ValidationIssue(BaseModel):
     technical_detail: str | None = None
 
 
-class StandardizationStep(BaseModel):
+class StandardizationStep(ApiModel):
     code: str
     label: str
     before_smiles: str
@@ -65,7 +70,7 @@ class StandardizationStep(BaseModel):
         return self
 
 
-class PropertyObservation(BaseModel):
+class PropertyObservation(ApiModel):
     value: str | float | int | None
     unit: str | None = None
     status: ResultStatus
@@ -81,7 +86,7 @@ class PropertyObservation(BaseModel):
         return self
 
 
-class PropertyComparison(BaseModel):
+class PropertyComparison(ApiModel):
     key: str
     label: str
     computed: PropertyObservation
@@ -89,9 +94,9 @@ class PropertyComparison(BaseModel):
     comparison_status: ResultStatus
 
 
-class SourceMetadata(BaseModel):
+class SourceMetadata(ApiModel):
     filename: str | None = None
-    source_type: str | None = None
+    source_type: Literal["direct-smiles", "photo", "paper"] | None = None
     citation: str | None = None
     page: int | None = None
     media_type: str | None = None
@@ -99,8 +104,44 @@ class SourceMetadata(BaseModel):
     file_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     extraction_method: str | None = None
 
+    @model_validator(mode="after")
+    def validate_source_metadata(self) -> Self:
+        if self.source_type == "direct-smiles":
+            supplied_file_fields = (
+                self.filename,
+                self.media_type,
+                self.file_size,
+                self.file_sha256,
+                self.extraction_method,
+            )
+            if any(value is not None for value in supplied_file_fields):
+                raise ValueError("direct SMILES input cannot include file metadata")
+            return self
+        if self.source_type in {"photo", "paper"}:
+            required = {
+                "filename": self.filename,
+                "media_type": self.media_type,
+                "file_size": self.file_size,
+                "file_sha256": self.file_sha256,
+                "extraction_method": self.extraction_method,
+            }
+            missing = [key for key, value in required.items() if value is None]
+            if missing:
+                raise ValueError(
+                    f"{self.source_type} source metadata is incomplete: {', '.join(missing)}"
+                )
+            if self.source_type == "paper" and self.media_type != "application/pdf":
+                raise ValueError("paper sources must use the application/pdf media type")
+            if self.source_type == "photo" and self.media_type not in {
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+            }:
+                raise ValueError("photo sources must be PNG, JPEG, or WebP")
+        return self
 
-class AnalyzeRequest(BaseModel):
+
+class AnalyzeRequest(ApiModel):
     structure: str = Field(min_length=1, max_length=20_000)
     input_type: Literal["smiles"] = "smiles"
     label: str | None = Field(default=None, max_length=200)
@@ -114,14 +155,14 @@ class AnalyzeRequest(BaseModel):
         return value
 
 
-class ToolVersions(BaseModel):
+class ToolVersions(ApiModel):
     pipeline: str
     python: str
     rdkit: str
     ruleset: str
 
 
-class RunManifest(BaseModel):
+class RunManifest(ApiModel):
     analysis_id: str
     input_sha256: str
     configuration_sha256: str
@@ -131,7 +172,7 @@ class RunManifest(BaseModel):
     tool_versions: ToolVersions
 
 
-class AnalyzeResponse(BaseModel):
+class AnalyzeResponse(ApiModel):
     analysis_id: str
     label: str
     raw_input: str
@@ -147,15 +188,53 @@ class AnalyzeResponse(BaseModel):
     manifest: RunManifest
 
 
-class BatchAnalyzeRequest(BaseModel):
+class BatchAnalyzeRequest(ApiModel):
     molecules: list[AnalyzeRequest] = Field(min_length=1, max_length=100)
 
 
-class BatchAnalyzeResponse(BaseModel):
+class BatchAnalyzeResponse(ApiModel):
     results: list[AnalyzeResponse]
 
 
-class HealthResponse(BaseModel):
+class RunResponse(ApiModel):
+    run_id: str
+    results: list[AnalyzeResponse]
+    input_sha256: str
+    configuration_sha256: str
+    output_sha256: str
+
+
+class ApiErrorItem(ApiModel):
+    code: str
+    message: str
+    field: str | None = None
+    technical_detail: str | None = None
+
+
+class ApiErrorResponse(ApiModel):
+    error: ApiErrorItem
+
+
+class HealthResponse(ApiModel):
     status: Literal["ok"]
     service: str
     versions: dict[str, Any]
+
+
+class TokenConfidence(ApiModel):
+    token: str
+    confidence: float = Field(ge=0, le=1)
+
+
+class ImageExtractionResponse(ApiModel):
+    status: Literal["candidate"] = "candidate"
+    candidate_smiles: str
+    method: Literal["DECIMER-Image-Transformer"] = "DECIMER-Image-Transformer"
+    model_version: str
+    source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    filename: str
+    media_type: Literal["image/png", "image/jpeg", "image/webp"]
+    confidence_mean: float | None = Field(default=None, ge=0, le=1)
+    confidence_min: float | None = Field(default=None, ge=0, le=1)
+    token_confidences: list[TokenConfidence] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)

@@ -43,9 +43,10 @@ The validation workspace opens on the invalid demo record to show the atom-level
 | Capability | Status | Current behavior |
 | --- | :---: | --- |
 | Direct SMILES input | ✅ Working | Accepts student-entered SMILES and preserves the submitted text |
-| Photo or screenshot source | ✅ Working | Previews a local image in the current page and sends its SHA-256 metadata with a confirmed manual SMILES transcription; the file itself stays in the browser |
+| Photo or screenshot source | ✅ Working | Sends PNG, JPEG, or WebP depictions to local DECIMER, returns an editable SMILES candidate with token confidence, and requires source comparison before confirmation |
 | Validation and explanatory errors | ✅ Working | Returns structured codes, explanations, locations, consequences, and next steps |
-| Ambiguity detection | ✅ Working | Flags unassigned stereochemistry without inventing a configuration |
+| Ambiguity detection | ✅ Working | Flags unassigned tetrahedral and E/Z stereochemistry without inventing a configuration |
+| HM-01 edge-case corpus | ✅ Working | Runs 31 declared chemistry cases plus API-boundary and repeated-hash checks |
 | Molecular visualization | ✅ Working | Generates an RDKit SVG depiction and highlights affected atoms when available |
 | Parent standardization | ✅ Working | Records cleanup, fragment-parent, uncharging, and tautomer steps |
 | Descriptor calculation | ✅ Working | Computes formula, mass, LogP, TPSA, H-bond counts, rotatable bonds, rings, and fraction Csp³ |
@@ -190,7 +191,7 @@ curl -X POST http://localhost:8000/api/analyze \
 │   │   ├── core/          # hashes, versions, and manifest creation
 │   │   ├── models/        # typed request and response contracts
 │   │   └── services/      # validation, standardization, evidence, descriptors
-│   └── tests/             # API-level chemistry and reproducibility tests
+│   └── tests/             # 31-case corpus, API boundaries, and reproducibility tests
 ├── frontend/
 │   └── src/
 │       ├── components/    # atomic React component hierarchy
@@ -215,9 +216,9 @@ npm run build
 
 ## Roadmap
 
-- Build and document the 31-case validation test set for broken and challenging inputs.
+- Expand the versioned edge-case corpus as new failure classes are discovered.
 - Add versioned, checksum-verified PubChem and ChEMBL snapshot adapters.
-- Add automatic paper/PDF and image extraction with mandatory student confirmation; photo upload and manual transcription are already supported.
+- Add automatic paper/PDF segmentation and structure extraction; image recognition with mandatory student confirmation is already supported through DECIMER.
 - Add a real molecular drawing editor as a lazy-loaded module.
 - Support adding and comparing multiple student-provided molecules in one run.
 - Persist immutable run records and provide exact replay by manifest.

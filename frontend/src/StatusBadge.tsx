@@ -12,6 +12,8 @@ const evidenceLabels: Record<EvidenceStatus, string> = {
   NOT_AVAILABLE: "Not available",
   NOT_APPLICABLE: "Not applicable",
   NOT_COMPUTED: "Not computed",
+  NO_REFERENCE_MATCH: "No reference match",
+  AMBIGUOUS_INPUT: "Ambiguous input",
   OUTSIDE_SNAPSHOT_COVERAGE: "Outside snapshot coverage",
 };
 
