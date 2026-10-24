@@ -335,3 +335,41 @@ def test_ingestion_rejects_malformed_provenance_hash(store: EvidenceStore) -> No
             canonical_smiles="CCO",
             raw_record_sha256="not-a-hash",
         )
+
+
+def test_builder_batch_rolls_back_every_write_on_failure(tmp_path: Path) -> None:
+    with EvidenceStore.create(tmp_path / "batch.sqlite") as store:
+        with pytest.raises(RuntimeError, match="stop build"):
+            with store.batch():
+                store.register_snapshot(
+                    SnapshotSpec(
+                        snapshot_id="atomic-v1",
+                        source_name="test",
+                        source_version="1",
+                        source_sha256=HASH,
+                        scope={},
+                        created_at="2026-10-24T00:00:00Z",
+                    )
+                )
+                store.add_molecule(
+                    snapshot_id="atomic-v1",
+                    inchikey=INCHIKEY,
+                    canonical_smiles="CC",
+                    raw_record_sha256=HASH,
+                )
+                raise RuntimeError("stop build")
+        snapshot_count = store._connection.execute(  # noqa: SLF001
+            "SELECT count(*) FROM snapshots WHERE snapshot_id = 'atomic-v1'"
+        ).fetchone()[0]
+        molecule_count = store._connection.execute(  # noqa: SLF001
+            "SELECT count(*) FROM molecules WHERE snapshot_id = 'atomic-v1'"
+        ).fetchone()[0]
+        assert snapshot_count == 0
+        assert molecule_count == 0
+
+
+def test_nested_builder_batches_are_rejected(store: EvidenceStore) -> None:
+    with store.batch():
+        with pytest.raises(EvidenceStoreError, match="nested"):
+            with store.batch():
+                pass

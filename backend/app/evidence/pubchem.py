@@ -143,7 +143,7 @@ def _optional_float(value: str, *, field_name: str) -> float | None:
         raise EvidenceStoreError(f"PubChem {field_name} must be numeric: {value}") from error
 
 
-def import_pubchem_snapshot(
+def _import_pubchem_snapshot(
     store: EvidenceStore,
     *,
     snapshot_id: str,
@@ -394,6 +394,34 @@ def import_pubchem_snapshot(
         target_count=len(targets),
         content_sha256=content_hash,
     )
+
+
+def import_pubchem_snapshot(
+    store: EvidenceStore,
+    *,
+    snapshot_id: str,
+    source_version: str,
+    created_at: str,
+    raw_files: dict[int, bytes],
+    molecules: tuple[PubChemMoleculeSpec, ...],
+    targets: tuple[PubChemTargetSpec, ...],
+    assays: tuple[PubChemAssaySpec, ...],
+    retraction_index: FrozenRetractionIndex,
+    source_uri: str = "https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest",
+) -> PubChemImportResult:
+    with store.batch():
+        return _import_pubchem_snapshot(
+            store,
+            snapshot_id=snapshot_id,
+            source_version=source_version,
+            created_at=created_at,
+            raw_files=raw_files,
+            molecules=molecules,
+            targets=targets,
+            assays=assays,
+            retraction_index=retraction_index,
+            source_uri=source_uri,
+        )
 
 
 def read_pubchem_raw_files(

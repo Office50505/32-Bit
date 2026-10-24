@@ -1,6 +1,7 @@
 import hashlib
 import json
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -96,6 +97,7 @@ class EvidenceStore:
     def __init__(self, connection: sqlite3.Connection, *, read_only: bool) -> None:
         self._connection = connection
         self._read_only = read_only
+        self._batch_active = False
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA foreign_keys = ON")
         if read_only:
@@ -134,6 +136,28 @@ class EvidenceStore:
     def close(self) -> None:
         self._connection.close()
 
+    @contextmanager
+    def batch(self):
+        """Commit a group of builder writes atomically and without per-row fsyncs."""
+
+        self._require_writable()
+        if self._batch_active:
+            raise EvidenceStoreError("nested evidence-store batches are not supported")
+        self._batch_active = True
+        try:
+            yield self
+        except BaseException:
+            self._connection.rollback()
+            raise
+        else:
+            self._connection.commit()
+        finally:
+            self._batch_active = False
+
+    def _commit(self) -> None:
+        if not self._batch_active:
+            self._connection.commit()
+
     def _initialize_schema(self) -> None:
         self._require_writable()
         current_version = int(self._connection.execute("PRAGMA user_version").fetchone()[0])
@@ -153,7 +177,7 @@ class EvidenceStore:
                 (SCHEMA_VERSION, "initial structured-first evidence schema"),
             )
             self._connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            self._connection.commit()
+            self._commit()
         self._require_supported_schema()
 
     def _require_supported_schema(self) -> None:
@@ -207,7 +231,7 @@ class EvidenceStore:
                 SCHEMA_VERSION,
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_molecule(
         self,
@@ -237,7 +261,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_molecule_alias(
         self,
@@ -252,7 +276,7 @@ class EvidenceStore:
             "INSERT INTO molecule_aliases VALUES (?, ?, ?, ?, ?)",
             (snapshot_id, inchikey, alias, alias.casefold().strip(), source),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_target(
         self,
@@ -280,7 +304,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_target_alias(
         self,
@@ -295,7 +319,7 @@ class EvidenceStore:
             "INSERT INTO target_aliases VALUES (?, ?, ?, ?, ?)",
             (snapshot_id, target_id, alias, alias.casefold().strip(), source),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_target_component(
         self,
@@ -325,7 +349,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_paper(
         self,
@@ -355,7 +379,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_assay(
         self,
@@ -389,7 +413,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_activity(
         self,
@@ -441,7 +465,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_passage(
         self,
@@ -465,7 +489,7 @@ class EvidenceStore:
         if paper is None:
             raise EvidenceStoreError(f"unknown paper: {paper_id}")
         try:
-            self._connection.execute("BEGIN")
+            self._connection.execute("SAVEPOINT add_passage")
             self._connection.execute(
                 "INSERT INTO passages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -485,9 +509,11 @@ class EvidenceStore:
                 "INSERT INTO passages_fts VALUES (?, ?, ?, ?, ?)",
                 (passage_id, snapshot_id, paper["title"], section_name, passage_text),
             )
-            self._connection.commit()
+            self._connection.execute("RELEASE SAVEPOINT add_passage")
+            self._commit()
         except BaseException:
-            self._connection.rollback()
+            self._connection.execute("ROLLBACK TO SAVEPOINT add_passage")
+            self._connection.execute("RELEASE SAVEPOINT add_passage")
             raise
 
     def add_retraction(
@@ -516,7 +542,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_run_record(
         self,
@@ -546,7 +572,7 @@ class EvidenceStore:
                 _normalized_hash(raw_record_sha256),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def add_evidence_item(self, item: EvidenceItem) -> None:
         self._require_snapshot_writable(item.snapshot_id)
@@ -574,7 +600,7 @@ class EvidenceStore:
                 _canonical_json(item.model_dump(mode="json")),
             ),
         )
-        self._connection.commit()
+        self._commit()
 
     def resolve_molecule_alias(self, snapshot_id: str, alias: str) -> list[sqlite3.Row]:
         return self._connection.execute(
@@ -771,7 +797,7 @@ class EvidenceStore:
             "UPDATE snapshots SET sealed = 1, content_sha256 = ? WHERE snapshot_id = ?",
             (content_hash, snapshot_id),
         )
-        self._connection.commit()
+        self._commit()
         return content_hash
 
     def verify_snapshot(self, snapshot_id: str) -> bool:

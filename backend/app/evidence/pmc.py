@@ -245,7 +245,7 @@ def import_jats_article(
     )
 
 
-def import_pmc_snapshot(
+def _import_pmc_snapshot(
     store: EvidenceStore,
     *,
     snapshot_id: str,
@@ -295,6 +295,30 @@ def import_pmc_snapshot(
         passage_count=total_passages,
         content_sha256=content_hash,
     )
+
+
+def import_pmc_snapshot(
+    store: EvidenceStore,
+    *,
+    snapshot_id: str,
+    source_version: str,
+    created_at: str,
+    articles: dict[str, bytes],
+    retraction_index: FrozenRetractionIndex,
+    source_uri: str = "https://europepmc.org/RestfulWebService",
+    maximum_passage_characters: int = 1_200,
+) -> PmcSnapshotResult:
+    with store.batch():
+        return _import_pmc_snapshot(
+            store,
+            snapshot_id=snapshot_id,
+            source_version=source_version,
+            created_at=created_at,
+            articles=articles,
+            retraction_index=retraction_index,
+            source_uri=source_uri,
+            maximum_passage_characters=maximum_passage_characters,
+        )
 
 
 def read_pmc_xml_files(

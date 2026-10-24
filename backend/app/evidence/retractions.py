@@ -227,27 +227,28 @@ class FrozenRetractionIndex:
         source_uri: str,
         created_at: str,
     ) -> str:
-        store.register_snapshot(
-            SnapshotSpec(
-                snapshot_id=snapshot_id,
-                source_name="Crossref Retraction Watch",
-                source_version=source_version,
-                source_sha256=self.source_sha256,
-                source_uri=source_uri,
-                license="CC0",
-                scope={"record_count": len(self.records)},
-                created_at=created_at,
+        with store.batch():
+            store.register_snapshot(
+                SnapshotSpec(
+                    snapshot_id=snapshot_id,
+                    source_name="Crossref Retraction Watch",
+                    source_version=source_version,
+                    source_sha256=self.source_sha256,
+                    source_uri=source_uri,
+                    license="CC0",
+                    scope={"record_count": len(self.records)},
+                    created_at=created_at,
+                )
             )
-        )
-        for record in self.records:
-            store.add_retraction(
-                snapshot_id=snapshot_id,
-                retraction_id=f"RW:{record.record_id}",
-                doi=record.doi,
-                pmid=record.pmid,
-                notice_type=record.notice_type,
-                notice_date=record.notice_date,
-                reason=record.reason,
-                raw_record_sha256=record.raw_record_sha256,
-            )
-        return store.seal_snapshot(snapshot_id)
+            for record in self.records:
+                store.add_retraction(
+                    snapshot_id=snapshot_id,
+                    retraction_id=f"RW:{record.record_id}",
+                    doi=record.doi,
+                    pmid=record.pmid,
+                    notice_type=record.notice_type,
+                    notice_date=record.notice_date,
+                    reason=record.reason,
+                    raw_record_sha256=record.raw_record_sha256,
+                )
+            return store.seal_snapshot(snapshot_id)

@@ -68,15 +68,16 @@ def build_snapshot(
     temporary_file.close()
     try:
         with EvidenceStore.create(temporary_path) as store:
-            with Chembl36Extractor(source_database) as extractor:
-                stats = extractor.extract(
-                    destination=store,
-                    snapshot_id=snapshot_id,
-                    selection=selection,
-                    extracted_database_sha256=extracted_hash,
-                    created_at=created_at,
-                )
-            content_hash = store.seal_snapshot(snapshot_id)
+            with store.batch():
+                with Chembl36Extractor(source_database) as extractor:
+                    stats = extractor.extract(
+                        destination=store,
+                        snapshot_id=snapshot_id,
+                        selection=selection,
+                        extracted_database_sha256=extracted_hash,
+                        created_at=created_at,
+                    )
+                content_hash = store.seal_snapshot(snapshot_id)
             if not store.verify_snapshot(snapshot_id):
                 raise EvidenceStoreError("sealed snapshot failed its content-hash verification")
         os.replace(temporary_path, output_path)
