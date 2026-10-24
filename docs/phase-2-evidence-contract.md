@@ -84,11 +84,24 @@ activity, paper, passage, retraction, run-record, and evidence-item tables. SQLi
 lexical passage index. Snapshot construction is writable; claim checking opens the completed file
 in read-only, immutable mode.
 
-ChEMBL extraction accepts only a database whose internal `version` table contains `ChEMBL_36`.
-The current live API is not used for this final source because it follows the latest release and may
-therefore differ from release 36. The builder records release DOI `10.6019/CHEMBL.database.36`, the
-official archive checksum, and the checksum of the unpacked SQLite database. Output construction is
-atomic: a temporary database is sealed and verified before being renamed to the requested path.
+The full-release ChEMBL extractor accepts only a database whose internal `version` table contains
+`ChEMBL_36`. It records release DOI `10.6019/CHEMBL.database.36`, the official archive checksum,
+and the checksum of the unpacked SQLite database. Output construction is atomic: a temporary
+database is sealed and verified before being renamed to the requested path.
+
+For storage-constrained development, the official ChEMBL Data Web Services are also supported as
+a snapshot-construction source. This is not a live-data runtime mode. The acquisition command pins
+an expected numbered release, saves the exact JSON response bytes, records each request URL and
+response SHA-256, verifies pagination, and refuses release drift. The importer verifies all hashes,
+screens source documents against the frozen Retraction Watch index, normalizes the selected rows,
+and seals a local SQLite file. Claim checking then uses that SQLite file in immutable read-only
+mode and makes no ChEMBL web requests.
+
+The API reported `ChEMBL_37` with release date `2026-05-01` when checked on `2026-10-24`. The
+checked-in API example therefore explicitly pins `ChEMBL_37`; it must not be labelled as ChEMBL 36.
+If evaluation rules require release 36 specifically, the API cannot substitute for the archived
+release-36 database. A release-36 extract must instead be prepared once on a machine with enough
+storage and transferred as the much smaller scoped SQLite snapshot.
 
 Example builder invocation after the official archive has been downloaded, checksum-verified, and
 unpacked:
@@ -105,6 +118,24 @@ PYTHONPATH=backend python -m app.evidence.build_chembl36_snapshot \
 The example selection is intentionally a one-molecule smoke test, not the final benchmark scope.
 The reviewed pilot manifest must expand it only after the claim set defines the required molecules,
 targets, organisms, and endpoints.
+
+Storage-constrained ChEMBL 37 API build:
+
+```bash
+PYTHONPATH=backend python -m app.evidence.build_chembl_api_snapshot \
+  --selection backend/config/evidence/pilot-selection-api.example.json \
+  --raw-dir data/raw/chembl-api/chembl37-pilot-v1 \
+  --output data/processed/chembl-api-37-pilot-v1.sqlite \
+  --snapshot-id chembl-api-37-pilot-v1 \
+  --created-at 2026-10-24T00:00:00Z \
+  --retraction-watch-csv data/raw/retractions/retraction_watch-2026-10-24.csv
+```
+
+If `--raw-dir` already contains a verified acquisition, the command reuses it without fetching.
+Add `--offline` to require that behavior and fail if the raw snapshot is absent. A real
+imatinib/ABL1 smoke build produced 131 activity records, 131 assay records, and 43 source-document
+records from 588 KiB of frozen JSON, then sealed a 512 KiB SQLite snapshot. These counts demonstrate
+the pipeline only; they are not the reviewed pilot or evaluation corpus.
 
 The Ollama adapter always validates model output against strict Pydantic contracts and assigns
 structural statement IDs (`S1`, `S2`, ...) deterministically. Its preferred mode sends JSON Schema
@@ -143,8 +174,9 @@ before runtime use.
 
 Before an API endpoint is exposed, the project must add:
 
-1. acquire and checksum the official source files, then build and integration-test the combined
-   sealed pilot database;
+1. approve the final release-pinned selection, acquire and checksum its official API responses (or
+   use the numbered full-release database), then build and integration-test the combined sealed
+   pilot database;
 2. define a reviewed pilot selection independently of the locked 150 evaluation claims;
 3. supply and freeze the 150-claim gold set with reviewer labels and evidence references;
 4. add a benchmarked passage-entailment step or explicitly keep literature claims

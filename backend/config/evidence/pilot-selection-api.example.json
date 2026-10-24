@@ -1,0 +1,15 @@
+{
+  "expected_release": "ChEMBL_37",
+  "molecule_chembl_ids": [
+    "CHEMBL941"
+  ],
+  "target_chembl_ids": [
+    "CHEMBL1862"
+  ],
+  "endpoints": [
+    "IC50",
+    "EC50",
+    "Ki",
+    "Kd"
+  ]
+}
