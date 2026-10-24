@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, PenLine, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, FlaskConical, PenLine, Trash2 } from "lucide-react";
 
 import type { AnalyzeResponse } from "../../schemas/analysis";
 import { Button } from "../atoms/Button";
@@ -26,21 +26,19 @@ export function CandidatePanel({
   const weight = candidate?.properties.find((item) => item.key === "molecular_weight")?.computed;
 
   return (
-    <section className="candidate-panel" aria-label="Extracted structure candidate">
+    <section className="candidate-panel" aria-label="Molecular structure preview">
       <header className="panel-header">
-        <h2>Extracted structure</h2>
-        <div className="candidate-pagination">
-          <button type="button" aria-label="Previous candidate"><ChevronLeft size={18} /></button>
-          <span>1 of 1</span>
-          <button type="button" aria-label="Next candidate"><ChevronRight size={18} /></button>
-        </div>
+        <h2>Structure preview</h2>
+        <span className="panel-kicker">RDKit depiction</span>
       </header>
 
-      <div className="confirmation-notice">
-        <AlertTriangle size={22} aria-hidden="true" />
-        <strong>Needs confirmation</strong>
-        <span>We found a structure. Please confirm it matches the source.</span>
-      </div>
+      {candidate ? (
+        <div className="confirmation-notice">
+          <AlertTriangle size={22} aria-hidden="true" />
+          <strong>Review before analysis</strong>
+          <span>Confirm that the rendered structure matches the SMILES you entered.</span>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="candidate-loading"><Spinner label="Rendering molecular structure" /> Rendering structure…</div>
@@ -50,33 +48,41 @@ export function CandidatePanel({
           <span>{error.message}</span>
           <small>Start the FastAPI backend on port 8000; no value has been guessed.</small>
         </div>
-      ) : (
+      ) : candidate ? (
         <>
           <div className="candidate-structure">
-            <MoleculeSvg svg={candidate?.depiction_svg} label={`${candidate?.label ?? "Candidate"} structure`} />
-            <strong>{candidate?.label ?? "Candidate molecule"}</strong>
+            <MoleculeSvg svg={candidate.depiction_svg} label={`${candidate.label} structure`} />
+            <strong>{candidate.label}</strong>
           </div>
           <dl className="candidate-metadata">
             <div><dt>Molecular formula</dt><dd>{formula?.value ?? "Unknown"}</dd></div>
             <div><dt>Molecular weight</dt><dd>{weight?.value ?? "Unknown"} {weight?.unit}</dd></div>
-            <div><dt>SMILES</dt><dd><code>{candidate?.raw_input}</code><Copy size={15} /></dd></div>
-            <div><dt>Candidate source</dt><dd>Bundled development fixture</dd></div>
+            <div><dt>Submitted SMILES</dt><dd><code>{candidate.raw_input}</code></dd></div>
+            <div><dt>Input source</dt><dd>Direct entry</dd></div>
           </dl>
         </>
+      ) : (
+        <div className="candidate-empty">
+          <span><FlaskConical size={30} aria-hidden="true" /></span>
+          <h3>No structure entered</h3>
+          <p>Enter a SMILES string to generate a molecular depiction and validation preview.</p>
+        </div>
       )}
 
-      <div className="candidate-actions">
-        <Button icon={<PenLine size={18} />} onClick={onEdit}>Edit structure</Button>
-        <Button icon={<Trash2 size={18} />} onClick={onReject}>Reject</Button>
-        <Button
-          variant="primary"
-          icon={<Check size={18} />}
-          onClick={onConfirm}
-          disabled={!candidate || isLoading || Boolean(error)}
-        >
-          Confirm structure
-        </Button>
-      </div>
+      {candidate ? (
+        <div className="candidate-actions">
+          <Button icon={<PenLine size={18} />} onClick={onEdit}>Edit input</Button>
+          <Button icon={<Trash2 size={18} />} onClick={onReject}>Clear</Button>
+          <Button
+            variant="primary"
+            icon={<Check size={18} />}
+            onClick={onConfirm}
+            disabled={isLoading || Boolean(error)}
+          >
+            Confirm and analyze
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { Search, UserRound } from "lucide-react";
+import { Code2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 export function AppHeader() {
@@ -9,13 +9,16 @@ export function AppHeader() {
       </NavLink>
       <nav className="app-nav" aria-label="Primary navigation">
         <NavLink to="/" end>New analysis</NavLink>
-        <NavLink to="/runs/demo">Runs</NavLink>
-        <a href="#about">About</a>
       </nav>
-      <div className="app-header__tools">
-        <button type="button" aria-label="Search runs"><Search size={21} /></button>
-        <button type="button" aria-label="Account"><UserRound size={22} /></button>
-      </div>
+      <a
+        className="source-link"
+        href="https://github.com/Office50505/32-Bit"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <Code2 size={18} aria-hidden="true" />
+        <span>Source</span>
+      </a>
     </header>
   );
 }

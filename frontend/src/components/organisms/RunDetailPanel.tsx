@@ -34,14 +34,14 @@ export function RunDetailPanel({ activeTab, results, selected }: RunDetailPanelP
   if (activeTab === "evidence") {
     return (
       <section className="run-detail-panel">
-        <header><h2>Frozen evidence</h2><span>{selected.manifest.snapshot_id}</span></header>
+        <header><h2>Reference evidence</h2><span>{selected.manifest.snapshot_id}</span></header>
         <p className="coverage-note">{selected.manifest.snapshot_scope}</p>
         <div className="evidence-list">
           {selected.properties.map((property) => (
             <div key={property.key}>
               <strong>{property.label}</strong>
               <span>{property.evidence.status.replaceAll("_", " ").toLowerCase()}</span>
-              <p>{property.evidence.reason ?? "Evidence value is available in the frozen fixture."}</p>
+              <p>{property.evidence.reason ?? "A value is available in the configured frozen snapshot."}</p>
             </div>
           ))}
         </div>

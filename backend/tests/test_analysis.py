@@ -17,7 +17,8 @@ def test_aspirin_is_valid_and_computed() -> None:
     weight = next(item for item in result["properties"] if item["key"] == "molecular_weight")
     assert weight["computed"]["status"] == "AVAILABLE"
     assert weight["computed"]["value"] == 180.16
-    assert weight["evidence"]["status"] == "AVAILABLE"
+    assert weight["evidence"]["status"] == "NOT_AVAILABLE"
+    assert weight["evidence"]["reason_code"] == "REFERENCE_SNAPSHOT_NOT_CONFIGURED"
 
 
 def test_impossible_valence_is_not_computed() -> None:

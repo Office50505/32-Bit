@@ -9,8 +9,8 @@ from app.models.analysis import RunManifest, ToolVersions
 
 PIPELINE_VERSION = "0.1.0"
 RULESET_VERSION = "hm-01.1"
-SNAPSHOT_ID = "demo-evidence-fixture-v1"
-SNAPSHOT_SCOPE = "curated development fixture; not full ChEMBL or PubChem coverage"
+SNAPSHOT_ID = "not-configured"
+SNAPSHOT_SCOPE = "No frozen PubChem or ChEMBL snapshot is configured in this build."
 
 
 def canonical_json(value: Any) -> str:

@@ -1,5 +1,6 @@
-import { DEMO_COMPARISON_INPUTS, RUN_DRAFT_STORAGE_KEY } from "../data/demo";
 import type { AnalyzeRequest } from "../schemas/analysis";
+
+const RUN_DRAFT_STORAGE_KEY = "provenancelab.run-draft.v1";
 
 interface StoredRunDraft {
   version: 1;
@@ -14,15 +15,15 @@ export function saveRunDraft(molecules: AnalyzeRequest[]): void {
 export function loadRunDraft(): AnalyzeRequest[] {
   const raw = sessionStorage.getItem(RUN_DRAFT_STORAGE_KEY);
   if (!raw) {
-    return DEMO_COMPARISON_INPUTS;
+    return [];
   }
   try {
     const parsed = JSON.parse(raw) as Partial<StoredRunDraft>;
     if (parsed.version !== 1 || !Array.isArray(parsed.molecules) || parsed.molecules.length === 0) {
-      return DEMO_COMPARISON_INPUTS;
+      return [];
     }
     return parsed.molecules;
   } catch {
-    return DEMO_COMPARISON_INPUTS;
+    return [];
   }
 }

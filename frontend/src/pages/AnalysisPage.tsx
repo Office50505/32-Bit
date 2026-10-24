@@ -7,45 +7,51 @@ import { CandidatePanel } from "../components/organisms/CandidatePanel";
 import { SourceWorkspace } from "../components/organisms/SourceWorkspace";
 import { AppShell } from "../components/templates/AppShell";
 import type { InputMode } from "../components/molecules/InputModeTab";
-import { DEFAULT_CANDIDATE, DEMO_COMPARISON_INPUTS } from "../data/demo";
 import { saveRunDraft } from "../utils/runDraft";
 
 export default function AnalysisPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<InputMode>("paper");
-  const [fileName, setFileName] = useState(DEFAULT_CANDIDATE.source?.filename ?? "paper_figure_2.pdf");
-  const [structure, setStructure] = useState(DEFAULT_CANDIDATE.structure);
-  const [label, setLabel] = useState(DEFAULT_CANDIDATE.label ?? "Candidate molecule");
+  const [mode, setMode] = useState<InputMode>("data");
+  const [structure, setStructure] = useState("");
+  const [label, setLabel] = useState("");
   const deferredStructure = useDeferredValue(structure.trim());
+  const normalizedLabel = label.trim();
 
   const candidateQuery = useQuery({
-    queryKey: ["candidate-preview", deferredStructure, label],
-    queryFn: ({ signal }) => analyzeMolecule({ structure: deferredStructure, label }, signal),
+    queryKey: ["candidate-preview", deferredStructure, normalizedLabel],
+    queryFn: ({ signal }) => analyzeMolecule({
+      structure: deferredStructure,
+      label: normalizedLabel || undefined,
+      source: { source_type: "direct-smiles" },
+    }, signal),
     enabled: deferredStructure.length > 0,
     staleTime: Number.POSITIVE_INFINITY,
     retry: 1,
   });
 
   const confirmCandidate = () => {
-    const confirmed = { structure, label, source: { filename: fileName, source_type: mode } };
-    saveRunDraft([confirmed, DEMO_COMPARISON_INPUTS[1], DEMO_COMPARISON_INPUTS[2]]);
-    navigate("/runs/current");
+    if (!candidateQuery.data) return;
+    const confirmed = {
+      structure: structure.trim(),
+      label: normalizedLabel || undefined,
+      source: { source_type: "direct-smiles" },
+    };
+    saveRunDraft([confirmed]);
+    navigate(`/runs/${candidateQuery.data.analysis_id}`);
   };
 
   return (
     <AppShell activeStep={0}>
       <header className="page-heading">
-        <h1>Start with your source</h1>
-        <p>Upload the evidence you have. We’ll preserve the original and ask you to confirm every extracted structure.</p>
+        <h1>Validate a molecular structure</h1>
+        <p>Enter a SMILES string to inspect validity, ambiguity, standardization, calculated properties, and provenance.</p>
       </header>
       <div className="analysis-grid">
         <SourceWorkspace
           mode={mode}
-          fileName={fileName}
           structure={structure}
           label={label}
           onModeChange={setMode}
-          onFileSelect={(file) => setFileName(file.name)}
           onStructureChange={setStructure}
           onLabelChange={setLabel}
         />

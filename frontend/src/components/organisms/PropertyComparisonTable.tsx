@@ -26,15 +26,15 @@ function toneForComparison(status: ResultStatus): StatusTone {
 export function PropertyComparisonTable({ results }: { results: AnalyzeResponse[] }) {
   const validResults = results.filter((result) => result.status !== "invalid");
   const propertyKeys = validResults[0]?.properties.map((item) => item.key) ?? [];
-  const snapshotLabel = validResults[0]?.manifest.snapshot_id ?? "No snapshot";
+  const snapshotLabel = validResults[0]?.manifest.snapshot_scope ?? "No reference snapshot configured";
 
   return (
     <section className="property-section" aria-labelledby="property-heading">
       <header>
         <h2 id="property-heading">Property comparison (valid structures only)</h2>
-        <span>{snapshotLabel} · frozen development fixture</span>
+        <span>{snapshotLabel}</span>
       </header>
-      <div className="property-table-wrap">
+      {validResults.length ? <div className="property-table-wrap">
         <table className="property-table">
           <thead>
             <tr>
@@ -44,7 +44,7 @@ export function PropertyComparisonTable({ results }: { results: AnalyzeResponse[
             <tr>
               {validResults.flatMap((result) => [
                 <th key={`${result.analysis_id}-computed`}>Computed</th>,
-                <th key={`${result.analysis_id}-evidence`}>Frozen evidence</th>,
+                <th key={`${result.analysis_id}-evidence`}>Reference evidence</th>,
                 <th key={`${result.analysis_id}-status`}>Status</th>,
               ])}
             </tr>
@@ -73,7 +73,9 @@ export function PropertyComparisonTable({ results }: { results: AnalyzeResponse[
             })}
           </tbody>
         </table>
-      </div>
+      </div> : (
+        <p className="property-empty">No properties were calculated because this run contains no valid molecular structure.</p>
+      )}
     </section>
   );
 }

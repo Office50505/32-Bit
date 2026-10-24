@@ -6,11 +6,12 @@ interface InputModeTabProps {
   active: boolean;
   icon: LucideIcon;
   label: string;
+  badge?: string;
   mode: InputMode;
   onSelect: (mode: InputMode) => void;
 }
 
-export function InputModeTab({ active, icon: Icon, label, mode, onSelect }: InputModeTabProps) {
+export function InputModeTab({ active, icon: Icon, label, badge, mode, onSelect }: InputModeTabProps) {
   return (
     <button
       type="button"
@@ -20,7 +21,10 @@ export function InputModeTab({ active, icon: Icon, label, mode, onSelect }: Inpu
       onClick={() => onSelect(mode)}
     >
       <Icon size={19} strokeWidth={1.75} aria-hidden="true" />
-      <span>{label}</span>
+      <span className="input-mode__copy">
+        <span>{label}</span>
+        {badge ? <small>{badge}</small> : null}
+      </span>
     </button>
   );
 }

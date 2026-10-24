@@ -23,8 +23,8 @@ export function ValidationWorkspace({
 
   return (
     <section className="validation-workspace">
-      <aside className="molecule-list" aria-label="Extracted structures">
-        <h2>Extracted structures ({results.length})</h2>
+      <aside className="molecule-list" aria-label="Submitted structures">
+        <h2>Submitted structures ({results.length})</h2>
         {results.map((result, index) => (
           <MoleculeListItem
             key={result.analysis_id}

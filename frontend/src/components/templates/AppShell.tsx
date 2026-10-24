@@ -18,8 +18,8 @@ export function AppShell({ activeStep, children }: AppShellProps) {
         <main className="app-main">{children}</main>
       </div>
       <footer className="app-footer">
-        <span><ShieldCheck size={18} /> No source leaves your run record. Every transformation is logged.</span>
-        <nav aria-label="Legal"><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#help">Help</a></nav>
+        <span><ShieldCheck size={18} /> Deterministic analysis · transformations and hashes are recorded.</span>
+        <span>Research prototype · frozen reference snapshots are not configured</span>
       </footer>
     </div>
   );
