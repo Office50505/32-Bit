@@ -12,6 +12,9 @@ from app.models.analysis import (
     AnalyzeResponse,
     BatchAnalyzeRequest,
     BatchAnalyzeResponse,
+    Conformer3D,
+    ConformerRequest,
+    DocumentExtractionResponse,
     ExtractionEngineStatus,
     HealthResponse,
     ImageExtractionResponse,
@@ -20,6 +23,8 @@ from app.models.analysis import (
 from app.models.benzo import BenzoChatRequest, BenzoChatResponse
 from app.models.evidence_assistant import ClaimCheckRequest, ClaimCheckResponse
 from app.services.chemistry import analyze_structure
+from app.services.conformers import generate_conformer
+from app.services.document_extraction import MAX_PDF_BYTES, extract_pdf_candidates
 from app.services.evidence_runtime import EvidenceRuntimeError, get_evidence_runtime
 from app.services.image_recognition import (
     MAX_IMAGE_BYTES,
@@ -56,6 +61,11 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 @router.post("/analyze/batch", response_model=BatchAnalyzeResponse)
 def analyze_batch(request: BatchAnalyzeRequest) -> BatchAnalyzeResponse:
     return BatchAnalyzeResponse(results=[analyze_structure(item) for item in request.molecules])
+
+
+@router.post("/conformer", response_model=Conformer3D)
+def create_conformer(request: ConformerRequest) -> Conformer3D:
+    return generate_conformer(request.structure)
 
 
 @router.post("/evidence/check", response_model=ClaimCheckResponse)
@@ -95,6 +105,18 @@ def extract_image_candidate(
         filename=image.filename or "uploaded-image",
         media_type=image.content_type or "application/octet-stream",
         hand_drawn=hand_drawn,
+    )
+
+
+@router.post("/extract/document", response_model=DocumentExtractionResponse)
+def extract_document_candidates(
+    document: Annotated[UploadFile, File()],
+) -> DocumentExtractionResponse:
+    payload = document.file.read(MAX_PDF_BYTES + 1)
+    return extract_pdf_candidates(
+        payload,
+        filename=document.filename or "uploaded-paper.pdf",
+        media_type=document.content_type or "application/octet-stream",
     )
 
 

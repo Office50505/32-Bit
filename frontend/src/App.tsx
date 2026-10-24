@@ -14,16 +14,19 @@ import {
 
 import { BenzoAssistant } from "./BenzoAssistant";
 import {
+  analyzeBatch,
   analyzeMolecule,
   createAnalysisRun,
   downloadRunReport,
+  extractMoleculeDocument,
   extractMoleculeImage,
   prepareImageExtractionEngine,
 } from "./api/analysis";
-import type { MoleculeCandidate, StepId } from "./domain";
+import type { ExtractedSourceCandidate, MoleculeCandidate, StepId } from "./domain";
 import { LiveMoleculeSvg } from "./LiveMoleculeSvg";
 import { fromApi } from "./live";
 import Molecule3D from "./Molecule3D";
+import { MoleculeCollectionReview } from "./MoleculeCollectionReview";
 import type {
   AnalyzeRequest,
   AnalyzeResponse,
@@ -35,7 +38,7 @@ import { SourceReviewDialog } from "./SourceReviewDialog";
 import { SourceLanding } from "./SourceLanding";
 import { MoleculeStatusBadge } from "./StatusBadge";
 import { ValidationDesk } from "./ValidationDesk";
-import { parseCsvMolecule } from "./utils/csvMolecule";
+import { parseCsvMolecules } from "./utils/csvMolecule";
 
 const steps: { id: StepId; label: string; detail: string }[] = [
   { id: "source", label: "Source", detail: "Upload or paste" },
@@ -47,6 +50,7 @@ const steps: { id: StepId; label: string; detail: string }[] = [
 
 type InputMode = "csv" | "paper" | "photo" | "smiles";
 type BrowserSource = { file: File; url: string };
+const MAX_RUN_MOLECULES = 100;
 
 function propertyValue(preview: AnalyzeResponse | null, key: string): string {
   const observation = preview?.properties.find((property) => property.key === key)?.computed;
@@ -82,7 +86,11 @@ export default function App() {
   const [draftPage, setDraftPage] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [preview, setPreview] = useState<AnalyzeResponse | null>(null);
-  const [, setReviewing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [sourceCandidates, setSourceCandidates] = useState<ExtractedSourceCandidate[]>([]);
+  const [collectionRequests, setCollectionRequests] = useState<AnalyzeRequest[]>([]);
+  const [collectionPreviews, setCollectionPreviews] = useState<AnalyzeResponse[]>([]);
+  const [selectedCandidateIndices, setSelectedCandidateIndices] = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -91,8 +99,9 @@ export default function App() {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [fileError, setFileError] = useState("");
+  const [fileNotice, setFileNotice] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [, setExtracting] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [, setExtractionStatus] = useState<ExtractionEngineStatus | null>(null);
   const [, setImageExtraction] = useState<ImageExtractionResponse | null>(null);
   const [extractionMethod, setExtractionMethod] = useState<string | null>(null);
@@ -135,10 +144,15 @@ export default function App() {
     setDraftPage("");
     setEditingIndex(null);
     setPreview(null);
+    setSourceCandidates([]);
+    setCollectionRequests([]);
+    setCollectionPreviews([]);
+    setSelectedCandidateIndices(new Set());
     setFile(null);
     setFileUrl(null);
     setFileHash(null);
     setFileError("");
+    setFileNotice("");
     setExtracting(false);
     setExtractionStatus(null);
     setImageExtraction(null);
@@ -160,77 +174,133 @@ export default function App() {
         : ["image/png", "image/jpeg", "image/webp"].includes(next.type);
     if (!accepted) {
       setFileError(isPaper ? "Choose a PDF file." : isCsv ? "Choose a CSV file." : "Choose a PNG, JPEG, or WebP image.");
+      setFileNotice("");
       return;
     }
     setMode(sourceMode);
-    if (next.size > 5 * 1024 * 1024) {
-      setFileError("Choose a file smaller than 5 MB.");
+    const sizeLimit = isPaper ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (next.size > sizeLimit) {
+      setFileError(`Choose a file smaller than ${isPaper ? 25 : 5} MB.`);
+      setFileNotice("");
+      return;
+    }
+    const availableSlots = MAX_RUN_MOLECULES - runInputs.length;
+    if (availableSlots <= 0) {
+      setFileError(`This run already contains the maximum of ${MAX_RUN_MOLECULES} molecules.`);
+      setFileNotice("");
       return;
     }
     const url = URL.createObjectURL(next);
     setFile(next);
     setFileUrl(url);
     setFileError("");
+    setFileNotice("");
     setFileHash(null);
     setImageExtraction(null);
     setExtractionStatus(null);
-    setExtractionMethod(isPaper ? "manual-smiles-transcription" : isCsv ? "csv-smiles-column" : null);
-    if (!isPaper && !isCsv) {
-      setDraftSmiles("");
-      setExtracting(true);
-    }
-    const extractionController = isPaper || isCsv ? null : new AbortController();
+    setExtractionMethod(isPaper ? "PDF-text-SMILES-extractor" : isCsv ? "csv-smiles-column" : null);
+    setDraftLabel("");
+    setDraftSmiles("");
+    setDraftPage("");
+    setPreview(null);
+    setSourceCandidates([]);
+    setCollectionRequests([]);
+    setCollectionPreviews([]);
+    setSelectedCandidateIndices(new Set());
+    setExtracting(!isCsv);
+    const extractionController = isCsv ? null : new AbortController();
     extractionAbortRef.current = extractionController;
     try {
-      const csvCandidate = isCsv ? parseCsvMolecule(await next.text()) : null;
-      const extractionPromise = isPaper || isCsv ? null : prepareImageExtractionEngine({
-        signal: extractionController?.signal,
-        onStatus: (status) => {
-          if (requestId === fileRequestRef.current) setExtractionStatus(status);
-        },
-      }).then(() => extractMoleculeImage(next, { signal: extractionController?.signal }));
       const digest = await crypto.subtle.digest("SHA-256", await next.arrayBuffer());
       const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
       if (requestId !== fileRequestRef.current) return;
       setFileHash(hash);
       setSourceFiles((current) => ({ ...current, [hash]: { file: next, url } }));
-      if (csvCandidate) {
-        setDraftSmiles(csvCandidate.smiles);
-        if (csvCandidate.label) setDraftLabel(csvCandidate.label);
-      }
-      if (extractionPromise) {
-        try {
-          const extraction = await extractionPromise;
-          if (requestId !== fileRequestRef.current) return;
-          if (extraction.source_sha256 !== hash) {
-            throw new Error("SOURCE_HASH_MISMATCH: the uploaded image changed during extraction.");
-          }
-          setImageExtraction(extraction);
-          setExtractionMethod(`${extraction.method} ${extraction.model_version}`);
-          setDraftSmiles(extraction.candidate_smiles);
-        } catch (error) {
-          if (requestId !== fileRequestRef.current) return;
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          setFileError(error instanceof Error ? error.message : "MolNexTR could not transcribe this image.");
-        } finally {
-          if (requestId === fileRequestRef.current) {
-            setExtracting(false);
-            extractionAbortRef.current = null;
-          }
+
+      if (isCsv) {
+        const parsed = parseCsvMolecules(await next.text());
+        const candidates: ExtractedSourceCandidate[] = parsed.slice(0, availableSlots).map((item) => ({
+          id: `csv-row-${item.row}`,
+          label: item.label ?? `Row ${item.row}`,
+          smiles: item.smiles,
+          confidence: "high",
+          mentions: [{ kind: "csv-row", row: item.row, locator: `Row ${item.row}`, excerpt: item.excerpt }],
+        }));
+        setSourceCandidates(candidates);
+        setDraftSmiles(candidates[0]?.smiles ?? "");
+        setDraftLabel(candidates[0]?.label ?? "");
+        if (parsed.length > candidates.length) {
+          setFileNotice(
+            `This run has room for ${availableSlots} more molecules. Only the first ${candidates.length} of ${parsed.length} CSV records were prepared.`,
+          );
         }
+        return;
       }
+
+      if (isPaper) {
+        const extraction = await extractMoleculeDocument(next, extractionController?.signal);
+        if (requestId !== fileRequestRef.current) return;
+        if (extraction.source_sha256 !== hash) {
+          throw new Error("SOURCE_HASH_MISMATCH: the uploaded PDF changed during extraction.");
+        }
+        const candidates: ExtractedSourceCandidate[] = extraction.candidates.slice(0, availableSlots).map((item) => ({
+          id: item.candidate_id,
+          label: item.label,
+          smiles: item.smiles,
+          confidence: item.confidence,
+          mentions: item.mentions.map((mention) => ({
+            kind: "pdf-text",
+            page: mention.page,
+            locator: mention.locator,
+            excerpt: mention.excerpt,
+          })),
+        }));
+        setSourceCandidates(candidates);
+        setDraftSmiles(candidates[0]?.smiles ?? "");
+        setDraftLabel(candidates[0]?.label ?? "");
+        setDraftPage(candidates[0]?.mentions[0]?.page?.toString() ?? "");
+        const warnings = [...extraction.warnings];
+        if (extraction.candidates.length > candidates.length) {
+          warnings.push(
+            `This run has room for ${availableSlots} more molecules. Only the first ${candidates.length} extracted candidates were prepared.`,
+          );
+        }
+        if (!candidates.length && !warnings.length) {
+          warnings.push("No molecular structures were found in the searchable PDF text.");
+        }
+        setFileNotice(warnings.join(" "));
+        return;
+      }
+
+      await prepareImageExtractionEngine({
+        signal: extractionController?.signal,
+        onStatus: (status) => {
+          if (requestId === fileRequestRef.current) setExtractionStatus(status);
+        },
+      });
+      const extraction = await extractMoleculeImage(next, { signal: extractionController?.signal });
+      if (requestId !== fileRequestRef.current) return;
+      if (extraction.source_sha256 !== hash) {
+        throw new Error("SOURCE_HASH_MISMATCH: the uploaded image changed during extraction.");
+      }
+      setImageExtraction(extraction);
+      setExtractionMethod(`${extraction.method} ${extraction.model_version}`);
+      setDraftSmiles(extraction.candidate_smiles);
+      setFileNotice(extraction.warnings.join(" "));
     } catch (error) {
       if (requestId !== fileRequestRef.current) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       URL.revokeObjectURL(url);
       setFile(null);
       setFileUrl(null);
-      setExtracting(false);
-      setExtractionStatus(null);
-      setFileError(
-        isCsv && error instanceof Error
-          ? error.message
-          : "This file could not be hashed. Choose it again before continuing.",
-      );
+      setFileHash(null);
+      setFileNotice("");
+      setFileError(error instanceof Error ? error.message : "This source could not be processed.");
+    } finally {
+      if (requestId === fileRequestRef.current) {
+        setExtracting(false);
+        extractionAbortRef.current = null;
+      }
     }
   }
 
@@ -275,7 +345,103 @@ export default function App() {
     };
   }
 
+  function buildExtractedRequest(candidate: ExtractedSourceCandidate): AnalyzeRequest {
+    const firstMention = candidate.mentions[0];
+    return {
+      structure: candidate.smiles,
+      label: candidate.label,
+      source: {
+        source_type: mode === "csv" ? "csv" : "paper",
+        filename: file?.name,
+        media_type: mode === "csv" ? "text/csv" : "application/pdf",
+        file_size: file?.size,
+        file_sha256: fileHash ?? undefined,
+        extraction_method: extractionMethod ?? (mode === "csv" ? "csv-smiles-column" : "PDF-text-SMILES-extractor"),
+        page: firstMention?.page,
+        row: firstMention?.row,
+        source_excerpt: firstMention?.excerpt,
+        mention_count: candidate.mentions.length,
+        mentions: candidate.mentions.map((mention) => ({
+          kind: mention.kind,
+          page: mention.page,
+          row: mention.row,
+          locator: mention.locator,
+          excerpt: mention.excerpt,
+        })),
+      },
+    };
+  }
+
+  function mergeEquivalentCandidates(
+    candidates: ExtractedSourceCandidate[],
+    requests: AnalyzeRequest[],
+    previews: AnalyzeResponse[],
+  ) {
+    const uniqueCandidates: ExtractedSourceCandidate[] = [];
+    const uniqueRequests: AnalyzeRequest[] = [];
+    const uniquePreviews: AnalyzeResponse[] = [];
+    const identityIndices = new Map<string, number>();
+    previews.forEach((item, index) => {
+      const identity = item.canonical_smiles ?? `invalid:${item.raw_input}`;
+      const existing = identityIndices.get(identity);
+      if (existing === undefined) {
+        identityIndices.set(identity, uniqueCandidates.length);
+        uniqueCandidates.push(candidates[index]);
+        uniqueRequests.push(requests[index]);
+        uniquePreviews.push(item);
+        return;
+      }
+      const mergedMentions = [...uniqueCandidates[existing].mentions, ...candidates[index].mentions];
+      uniqueCandidates[existing] = { ...uniqueCandidates[existing], mentions: mergedMentions };
+      const source = uniqueRequests[existing].source;
+      uniqueRequests[existing] = {
+        ...uniqueRequests[existing],
+        source: source ? {
+          ...source,
+          mention_count: mergedMentions.length,
+          mentions: mergedMentions.map((mention) => ({
+            kind: mention.kind,
+            page: mention.page,
+            row: mention.row,
+            locator: mention.locator,
+            excerpt: mention.excerpt,
+          })),
+        } : source,
+      };
+    });
+    return { candidates: uniqueCandidates, requests: uniqueRequests, previews: uniquePreviews };
+  }
+
   async function reviewCandidate() {
+    if (editingIndex === null && runInputs.length >= MAX_RUN_MOLECULES) {
+      setActionError(`This run already contains the maximum of ${MAX_RUN_MOLECULES} molecules.`);
+      return;
+    }
+    if (sourceCandidates.length) {
+      if (!file || !fileHash) {
+        setActionError("Wait for the source file to finish preparing before review.");
+        return;
+      }
+      const requests = sourceCandidates.map(buildExtractedRequest);
+      setReviewing(true);
+      setActionError("");
+      try {
+        const result = await analyzeBatch(requests);
+        const merged = mergeEquivalentCandidates(sourceCandidates, requests, result.results);
+        setSourceCandidates(merged.candidates);
+        setCollectionRequests(merged.requests);
+        setCollectionPreviews(merged.previews);
+        setSelectedCandidateIndices(new Set(
+          merged.previews.flatMap((item, index) => item.status === "valid" ? [index] : []),
+        ));
+        setStep("confirm");
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "The molecular collection could not be reviewed.");
+      } finally {
+        setReviewing(false);
+      }
+      return;
+    }
     const request = buildDraftRequest();
     if (!request) return;
     setReviewing(true);
@@ -287,6 +453,92 @@ export default function App() {
       setActionError(error instanceof Error ? error.message : "The chemistry service could not review this input.");
     } finally {
       setReviewing(false);
+    }
+  }
+
+  function toggleExtractedCandidate(index: number) {
+    if (collectionPreviews[index]?.status === "invalid") return;
+    setSelectedCandidateIndices((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function selectAllReadyCandidates() {
+    setSelectedCandidateIndices(new Set(
+      collectionPreviews.flatMap((item, index) => item.status === "valid" ? [index] : []),
+    ));
+  }
+
+  async function correctExtractedCandidate(index: number, structure: string) {
+    const candidate = sourceCandidates[index];
+    if (!candidate) throw new Error("The selected extracted candidate no longer exists.");
+    const correctedStructure = structure.trim();
+    if (!correctedStructure) throw new Error("Enter a SMILES value before re-checking the candidate.");
+    const correctedCandidate: ExtractedSourceCandidate = {
+      ...candidate,
+      smiles: correctedStructure,
+      confidence: "needs-review",
+    };
+    const correctedRequest = buildExtractedRequest(correctedCandidate);
+    setActionError("");
+    try {
+      const correctedPreview = await analyzeMolecule(correctedRequest);
+      const nextCandidates = sourceCandidates.map((item, itemIndex) => itemIndex === index ? correctedCandidate : item);
+      const nextRequests = collectionRequests.map((item, itemIndex) => itemIndex === index ? correctedRequest : item);
+      const nextPreviews = collectionPreviews.map((item, itemIndex) => itemIndex === index ? correctedPreview : item);
+      const selectedIdentities = new Set(
+        [...selectedCandidateIndices].map((itemIndex) => {
+          const item = collectionPreviews[itemIndex];
+          return item?.canonical_smiles ?? (item ? `invalid:${item.raw_input}` : "");
+        }).filter(Boolean),
+      );
+      const previous = collectionPreviews[index];
+      selectedIdentities.delete(previous?.canonical_smiles ?? (previous ? `invalid:${previous.raw_input}` : ""));
+      if (correctedPreview.status === "valid") {
+        selectedIdentities.add(correctedPreview.canonical_smiles ?? `invalid:${correctedPreview.raw_input}`);
+      }
+      const merged = mergeEquivalentCandidates(nextCandidates, nextRequests, nextPreviews);
+      setSourceCandidates(merged.candidates);
+      setCollectionRequests(merged.requests);
+      setCollectionPreviews(merged.previews);
+      setSelectedCandidateIndices(new Set(
+        merged.previews.flatMap((item, itemIndex) => {
+          const identity = item.canonical_smiles ?? `invalid:${item.raw_input}`;
+          return selectedIdentities.has(identity) ? [itemIndex] : [];
+        }),
+      ));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "The corrected structure could not be reviewed.");
+      throw error;
+    }
+  }
+
+  async function confirmExtractedCandidates() {
+    const selectedRequests = [...selectedCandidateIndices]
+      .sort((first, second) => first - second)
+      .map((index) => collectionRequests[index])
+      .filter((request): request is AnalyzeRequest => Boolean(request));
+    if (!selectedRequests.length) return;
+    const firstNewIndex = runInputs.length;
+    const nextInputs = [...runInputs, ...selectedRequests];
+    setConfirming(true);
+    setActionError("");
+    try {
+      const nextRun = await createAnalysisRun(nextInputs);
+      const nextMolecules = nextRun.results.map((result, index) => fromApi(result, index));
+      setRun(nextRun);
+      setRunInputs(nextInputs);
+      setMolecules(nextMolecules);
+      setSelectedId(nextMolecules[firstNewIndex]?.id ?? nextMolecules[0]?.id ?? "");
+      clearDraft();
+      setStep("validate");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "The molecular collection could not be saved.");
+    } finally {
+      setConfirming(false);
     }
   }
 
@@ -356,6 +608,10 @@ export default function App() {
     setImageExtraction(null);
     setExtracting(false);
     setPreview(null);
+    setSourceCandidates([]);
+    setCollectionRequests([]);
+    setCollectionPreviews([]);
+    setSelectedCandidateIndices(new Set());
     setActionError("");
     sourceDialogRef.current?.close();
     setStep("source");
@@ -375,13 +631,15 @@ export default function App() {
   }
 
   const pageTitle = step === "source" ? "Add a molecular source"
-    : step === "confirm" ? "Confirm a candidate"
+    : step === "confirm" ? collectionPreviews.length ? `Confirm ${collectionPreviews.length} candidates` : "Confirm a candidate"
       : step === "compare" ? "Compare structures"
         : step === "report" ? "Run report"
           : molecules.length ? "Validation complete" : "No active run";
   const pageDescription = step === "source"
     ? "Choose one source type. File controls appear only when that source requires a file."
-    : step === "confirm" ? "Review the real RDKit result before adding it to the run."
+    : step === "confirm" ? collectionPreviews.length
+      ? "Triage the extracted collection, inspect provenance, and generate computed 3D conformers on demand."
+      : "Review the real RDKit result before adding it to the run."
       : step === "compare" ? "Compare calculated values while keeping missing reference evidence explicit."
         : step === "report" ? "Export the complete validation and provenance record as a PDF."
           : molecules.length
@@ -412,11 +670,47 @@ export default function App() {
       <main className="main-content">{step !== "source" ? <div className="page-heading"><div><p className="breadcrumb"><Home size={14} /> Workspace <ChevronRight size={13} /> {steps.find((item) => item.id === step)?.label}</p><h1>{pageTitle}</h1><p className="page-description">{pageDescription}</p></div><div className="live-notice"><ShieldCheck size={18} /><div><strong>Live deterministic analysis</strong><span>No fallback values or demonstration records are used.</span></div></div></div> : null}
         {actionError ? <p className="page-error" role="alert"><AlertCircle size={16} /> {actionError}</p> : null}
 
-        {step === "source" ? <SourceLanding file={file} fileError={fileError} fileHash={fileHash} label={draftLabel} smiles={draftSmiles} onFileSelect={chooseLandingFile} onSmilesChange={(value) => { setDraftSmiles(value); setMode("smiles"); setActionError(""); }} onReview={() => void reviewCandidate()} /> : null}
+        {step === "source" ? <SourceLanding
+          file={file}
+          fileError={fileError}
+          fileNotice={fileNotice}
+          fileHash={fileHash}
+          label={draftLabel}
+          smiles={draftSmiles}
+          candidateCount={sourceCandidates.length}
+          extracting={extracting}
+          reviewing={reviewing}
+          onFileSelect={chooseLandingFile}
+          onSmilesChange={(value) => {
+            setDraftSmiles(value);
+            setMode("smiles");
+            setSourceCandidates([]);
+            setCollectionRequests([]);
+            setCollectionPreviews([]);
+            setSelectedCandidateIndices(new Set());
+            setFileNotice("");
+            setActionError("");
+          }}
+          onReview={() => void reviewCandidate()}
+        /> : null}
+
+        {step === "confirm" && collectionPreviews.length ? <MoleculeCollectionReview
+          filename={file?.name ?? "Uploaded source"}
+          sourceUrl={fileUrl}
+          candidates={sourceCandidates}
+          previews={collectionPreviews}
+          selectedIndices={selectedCandidateIndices}
+          confirming={confirming}
+          onToggle={toggleExtractedCandidate}
+          onCorrect={correctExtractedCandidate}
+          onSelectReady={selectAllReadyCandidates}
+          onConfirm={() => void confirmExtractedCandidates()}
+          onBack={() => setStep("source")}
+        /> : null}
 
 
-        {step === "confirm" && preview && <section className="confirmation-screen"><div className="section-head"><div><h2>Source and candidate</h2><p>Confirm the transcription only after comparing it with its source.</p></div><span className="section-kicker">02 / CONFIRM</span></div><div className="confirm-grid"><div className="source-preview"><div className="panel-title"><FileImage size={17} /><strong>Original source</strong><span>{file?.name ?? "Direct SMILES"}</span></div><div className="document-surface">{fileUrl && file?.type.startsWith("image/") ? <img src={fileUrl} alt={`Uploaded source ${file.name}`} /> : fileUrl && file?.type === "application/pdf" ? <iframe src={fileUrl} title={`Uploaded source ${file.name}`} /> : <div className="direct-source-preview"><Atom size={58} /><strong>{sourceEntryTitle}</strong><code>{draftSmiles}</code><small>{sourceEntryNote}</small></div>}</div></div>
-          <div className="candidate-card"><div className="panel-title"><Atom size={18} /><strong>RDKit candidate</strong><MoleculeStatusBadge status={preview.status} compact /></div><div className="candidate-visual"><LiveMoleculeSvg svg={preview.depiction_svg} /></div><div className="candidate-facts"><div><span>Label</span><strong>{preview.label}</strong></div><div><span>Formula</span><strong>{propertyValue(preview, "molecular_formula")}</strong></div><div><span>Molecular weight</span><strong>{propertyValue(preview, "molecular_weight")}</strong></div><div className="candidate-smiles"><span>Submitted SMILES</span><code>{preview.raw_input}</code></div></div><p className={`candidate-warning candidate-warning--${preview.status}`}><AlertCircle size={17} /> {preview.issues[0]?.explanation ?? "No blocking issue was detected by the configured ruleset."}</p><div className="candidate-actions"><button className="button button--primary" disabled={confirming} onClick={() => void confirmCandidate()}><Check size={17} />{confirming ? "Saving run…" : editingIndex === null ? "Confirm and add to run" : "Confirm changes"}</button><button className="button button--quiet" onClick={() => setStep("source")}><Pencil size={17} /> Edit input</button><button className="button button--danger" onClick={() => { setPreview(null); setDraftSmiles(""); setStep("source"); }}><X size={16} /> Reject candidate</button></div></div></div></section>}
+        {step === "confirm" && !collectionPreviews.length && preview && <section className="confirmation-screen"><div className="section-head"><div><h2>Source and candidate</h2><p>Confirm the transcription only after comparing it with its source.</p></div><span className="section-kicker">02 / CONFIRM</span></div><div className="confirm-grid"><div className="source-preview"><div className="panel-title"><FileImage size={17} /><strong>Original source</strong><span>{file?.name ?? "Direct SMILES"}</span></div><div className="document-surface">{fileUrl && file?.type.startsWith("image/") ? <img src={fileUrl} alt={`Uploaded source ${file.name}`} /> : fileUrl && file?.type === "application/pdf" ? <iframe src={fileUrl} title={`Uploaded source ${file.name}`} /> : <div className="direct-source-preview"><Atom size={58} /><strong>{sourceEntryTitle}</strong><code>{draftSmiles}</code><small>{sourceEntryNote}</small></div>}</div></div>
+          <div className="candidate-card"><div className="panel-title"><Atom size={18} /><strong>RDKit candidate</strong><MoleculeStatusBadge status={preview.status} compact /></div><div className="candidate-visual">{preview.status === "invalid" ? <div className="computed-3d-state"><AlertCircle size={28} /><strong>Invalid structure</strong><span>Correct the submitted SMILES before it enters the run.</span></div> : <LiveMoleculeSvg svg={preview.depiction_svg} />}</div><div className="candidate-facts"><div><span>Label</span><strong>{preview.label}</strong></div><div><span>Formula</span><strong>{propertyValue(preview, "molecular_formula")}</strong></div><div><span>Molecular weight</span><strong>{propertyValue(preview, "molecular_weight")}</strong></div><div className="candidate-smiles"><span>Submitted SMILES</span><code>{preview.raw_input}</code></div></div><p className={`candidate-warning candidate-warning--${preview.status}`}><AlertCircle size={17} /> {preview.issues[0]?.explanation ?? "No blocking issue was detected by the configured ruleset."}</p><div className="candidate-actions"><button className="button button--primary" disabled={confirming || preview.status === "invalid"} onClick={() => void confirmCandidate()}><Check size={17} />{confirming ? "Saving run…" : editingIndex === null ? "Confirm and add to run" : "Confirm changes"}</button><button className="button button--quiet" onClick={() => setStep("source")}><Pencil size={17} /> Edit input</button><button className="button button--danger" onClick={() => { setPreview(null); setDraftSmiles(""); setStep("source"); }}><X size={16} /> Reject candidate</button></div></div></div></section>}
 
         {(step === "validate" || step === "compare") && (selected ? <ValidationDesk step={step} molecules={molecules} selected={selected} filtered={filtered} search={search} onSearch={setSearch} onSelect={setSelectedId} onAddSource={() => { clearDraft(); setStep("source"); }} onEdit={editReviewedCandidate} onReviewSource={() => sourceDialogRef.current?.showModal()} /> : <div className="empty-run panel"><div><strong>No analyzed structures yet.</strong><span>Submit a source to create the first real run record.</span></div><button className="button button--primary" onClick={() => setStep("source")}>Add a molecular source</button></div>)}
 

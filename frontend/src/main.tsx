@@ -9,6 +9,7 @@ import "./styles/global.css";
 import "./styles/refinement.css";
 import "./styles/benzo-assistant.css";
 import "./styles/evidence-states.css";
+import "./styles/paper-review.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

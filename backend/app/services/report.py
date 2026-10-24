@@ -20,7 +20,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.models.analysis import AnalyzeResponse, RunResponse
+from app.models.analysis import AnalyzeResponse, MoleculeStatus, RunResponse
 
 NAVY = colors.HexColor("#10243A")
 TEAL = colors.HexColor("#0B8279")
@@ -44,12 +44,16 @@ def _text(value: object) -> str:
 
 
 def _depiction_png(result: AnalyzeResponse) -> bytes | None:
+    if result.status == MoleculeStatus.INVALID:
+        return None
+    structure = result.standardized_smiles or result.canonical_smiles
+    if not structure:
+        return None
     with rdBase.BlockLogs():
         try:
-            molecule = Chem.MolFromSmiles(result.raw_input, sanitize=False)
+            molecule = Chem.MolFromSmiles(structure)
             if molecule is None:
                 return None
-            molecule.UpdatePropertyCache(strict=False)
             rdDepictor.Compute2DCoords(molecule)
             drawer = rdMolDraw2D.MolDraw2DCairo(720, 300)
             drawer.drawOptions().clearBackground = False
@@ -208,9 +212,62 @@ def build_run_pdf(run: RunResponse) -> bytes:
                         ]
                     ),
                 ),
-                Paragraph("Validation findings", heading),
             ]
         )
+        if result.source is not None:
+            source = result.source
+            source_rows: list[list[object]] = [
+                ["Source type", _text(source.source_type)],
+                ["Filename", _text(source.filename)],
+                ["Extraction", _text(source.extraction_method)],
+                ["File SHA-256", _text(source.file_sha256)],
+            ]
+            if source.page is not None:
+                source_rows.append(["Primary page", str(source.page)])
+            if source.row is not None:
+                source_rows.append(["Primary row", str(source.row)])
+            if source.mentions:
+                locations = ", ".join(
+                    mention.locator
+                    or (
+                        f"Page {mention.page}"
+                        if mention.page is not None
+                        else f"Row {mention.row}"
+                    )
+                    for mention in source.mentions[:20]
+                )
+                if len(source.mentions) > 20:
+                    locations += f", +{len(source.mentions) - 20} more"
+                source_rows.append(
+                    [
+                        "Source mentions",
+                        Paragraph(escape(locations), small),
+                    ]
+                )
+            if source.source_excerpt:
+                source_rows.append(
+                    ["Source excerpt", Paragraph(escape(source.source_excerpt), small)]
+                )
+            story.extend(
+                [
+                    Paragraph("Source provenance", heading),
+                    Table(
+                        source_rows,
+                        colWidths=[42 * mm, 132 * mm],
+                        style=TableStyle(
+                            [
+                                ("BACKGROUND", (0, 0), (0, -1), PALE),
+                                ("GRID", (0, 0), (-1, -1), 0.4, LINE),
+                                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                                ("FONTSIZE", (0, 0), (-1, -1), 6.8),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                ("PADDING", (0, 0), (-1, -1), 4),
+                            ]
+                        ),
+                    ),
+                ]
+            )
+        story.append(Paragraph("Validation findings", heading))
         if result.issues:
             issue_rows = [["Code", "Finding", "Why it matters", "Next step"]]
             for issue in result.issues:

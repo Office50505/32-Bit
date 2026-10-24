@@ -13,6 +13,14 @@ export type ResultStatus =
   | "COMPUTATION_ERROR"
   | "CONFLICTING_EVIDENCE";
 
+export interface SourceMentionMetadata {
+  kind: "pdf-text" | "csv-row" | "image" | "manual";
+  page?: number;
+  row?: number;
+  locator?: string;
+  excerpt?: string;
+}
+
 export interface SourceMetadata {
   filename?: string;
   source_type?: string;
@@ -22,6 +30,10 @@ export interface SourceMetadata {
   file_size?: number;
   file_sha256?: string;
   extraction_method?: string;
+  row?: number;
+  source_excerpt?: string;
+  mention_count?: number;
+  mentions?: SourceMentionMetadata[];
 }
 
 export interface AnalyzeRequest {
@@ -161,4 +173,55 @@ export interface ImageExtractionResponse {
   confidence_min?: number | null;
   token_confidences: TokenConfidence[];
   warnings: string[];
+}
+
+export interface DocumentMention {
+  page: number;
+  excerpt: string;
+  label?: string | null;
+  locator: string;
+  extraction_method: "tagged-smiles" | "structure-token";
+}
+
+export interface DocumentMoleculeCandidate {
+  candidate_id: string;
+  label: string;
+  smiles: string;
+  canonical_smiles?: string | null;
+  confidence: "high" | "medium" | "needs-review";
+  mentions: DocumentMention[];
+  mention_count: number;
+}
+
+export interface DocumentExtractionResponse {
+  status: "candidates";
+  source_sha256: string;
+  filename: string;
+  media_type: "application/pdf";
+  method: "PDF-text-SMILES-extractor";
+  total_mentions: number;
+  candidates: DocumentMoleculeCandidate[];
+  warnings: string[];
+}
+
+export interface ConformerAtom {
+  element: string;
+  x: number;
+  y: number;
+  z: number;
+  formal_charge: number;
+}
+
+export interface ConformerBond {
+  begin: number;
+  end: number;
+  order: number;
+}
+
+export interface Conformer3D {
+  method: string;
+  structure_role: "standardized-parent";
+  coordinate_sha256: string;
+  atoms: ConformerAtom[];
+  bonds: ConformerBond[];
 }

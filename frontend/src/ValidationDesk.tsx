@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -14,11 +14,10 @@ import {
 } from "lucide-react";
 
 import { CompareTable } from "./CompareTable";
+import { ComputedMolecule3D } from "./ComputedMolecule3D";
 import type { AuditTab, MoleculeCandidate, StepId } from "./domain";
 import { LiveMoleculeSvg } from "./LiveMoleculeSvg";
 import { EvidenceStatusBadge, MoleculeStatusBadge } from "./StatusBadge";
-
-const Molecule3D = lazy(() => import("./Molecule3D"));
 
 const tabs: { id: AuditTab; label: string }[] = [
   { id: "validation", label: "Validation" },
@@ -60,9 +59,6 @@ export function ValidationDesk({
   const [resetSignal, setResetSignal] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
   const primaryIssue = selected.issues[0];
-  const highlightedAtoms = selected.issues.flatMap((issue) =>
-    issue.atomIndex === undefined ? [] : [issue.atomIndex]
-  );
   const hasFrozenSnapshot = selected.manifest.snapshotId.startsWith("pubchem-pug-cid-");
   const snapshotLabel = selected.status === "invalid"
     ? "Not applicable—invalid structure"
@@ -81,17 +77,16 @@ export function ValidationDesk({
         <label className="list-search"><Search size={16} /><input id="structure-search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search structures" aria-label="Search structures" /></label>
         <div className="molecule-rows">{filtered.map((molecule) => <button key={molecule.id} className={`molecule-row molecule-row--${molecule.status} ${selected.id === molecule.id ? "molecule-row--selected" : ""}`} onClick={() => { onSelect(molecule.id); setZoom(1); }} aria-pressed={selected.id === molecule.id}>
           <span className="row-thumbnail"><LiveMoleculeSvg svg={molecule.depictionSvg} /></span>
-          <span className="row-info"><strong>{molecule.label}</strong><small>{molecule.formula ?? "Formula not computed"}</small><em>{molecule.source}</em><MoleculeStatusBadge status={molecule.status} /></span>
+          <span className="row-info"><strong>{molecule.label}</strong><small>{molecule.formula ?? "Formula not computed"}</small><em>{molecule.mentionCount > 1 ? `${molecule.mentionCount} source mentions` : molecule.source}</em><MoleculeStatusBadge status={molecule.status} /></span>
         </button>)}{filtered.length === 0 ? <p className="list-empty">No structures match that search.</p> : null}</div>
         <button className="list-add" onClick={onAddSource}><Plus size={16} /> Add source</button>
       </div>
 
       <div className="viewer-panel panel">
-        <div className="viewer-heading"><div><h2>Molecular view</h2><p>{selected.label} · {view === "2d" ? "RDKit depiction tied to validation findings" : "illustrative layout derived from submitted SMILES"}</p></div><div className="view-switch" role="group" aria-label="View dimension"><button className={view === "2d" ? "active" : ""} onClick={() => setView("2d")}>2D evidence view</button><button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>3D sketch</button></div></div>
+        <div className="viewer-heading"><div><h2>Molecular view</h2><p>{selected.label} · {view === "2d" ? "RDKit depiction tied to validation findings" : "on-demand RDKit conformer from the standardized parent"}</p></div><div className="view-switch" role="group" aria-label="View dimension"><button className={view === "2d" ? "active" : ""} onClick={() => setView("2d")}>2D evidence view</button><button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>Computed 3D</button></div></div>
         <div className="viewer-options">{view === "3d" ? <label className="toggle-label">Autorotate <input type="checkbox" checked={autorotate} onChange={(event) => setAutorotate(event.target.checked)} /><span className="toggle-track" /></label> : <span className="viewer-mode-note">Evidence-backed 2D depiction</span>}</div>
         <div className={`viewer-canvas ${view === "2d" ? "viewer-canvas--2d" : "viewer-canvas--3d"}`}>
-          {view === "2d" ? <LiveMoleculeSvg svg={selected.depictionSvg} zoom={zoom} /> : <Suspense fallback={<div className="viewer-loading">Loading 3D sketch…</div>}><Molecule3D key={selected.id} smiles={selected.smiles} label={selected.label} autorotate={autorotate} highlightedAtoms={highlightedAtoms} resetSignal={resetSignal} zoom={zoom} /></Suspense>}
-          {view === "3d" ? <span className="viewer-watermark">Illustrative coordinates · not a validated conformer</span> : null}
+          {view === "2d" ? <LiveMoleculeSvg svg={selected.depictionSvg} zoom={zoom} /> : <ComputedMolecule3D key={selected.id} structure={selected.standardizedSmiles} label={selected.label} status={selected.status} autorotate={autorotate} resetSignal={resetSignal} zoom={zoom} />}
         </div>
         <div className="viewer-toolbar"><div className="zoom-control"><button onClick={() => changeZoom(-1)} aria-label="Zoom out"><Minus size={17} /></button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(1)} aria-label="Zoom in"><Plus size={17} /></button></div>
           <button onClick={() => setFullScreen((current) => !current)}><Maximize2 size={17} /> {fullScreen ? "Exit fullscreen" : "Expand"}</button>

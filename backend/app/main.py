@@ -4,7 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router
+from app.services.conformers import ConformerGenerationError
+from app.services.document_extraction import DocumentExtractionError
 from app.services.image_recognition import ImageRecognitionError
+from app.services.openai_benzo import configure_fal_api_key
+
+FAL_API_KEY = '75e3c6f6-05d5-4695-859a-9a34ef5e8623:e916ba3225c20a6d51ee695a6735df53'
+configure_fal_api_key(FAL_API_KEY)
 
 app = FastAPI(
     title="ProvenanceLab API",
@@ -21,6 +27,42 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.exception_handler(DocumentExtractionError)
+async def document_extraction_error(
+    _request: Request,
+    exception: DocumentExtractionError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exception.status_code,
+        content={
+            "error": {
+                "code": exception.code,
+                "message": exception.message,
+                "field": "document",
+                "technical_detail": exception.technical_detail,
+            }
+        },
+    )
+
+
+@app.exception_handler(ConformerGenerationError)
+async def conformer_generation_error(
+    _request: Request,
+    exception: ConformerGenerationError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exception.status_code,
+        content={
+            "error": {
+                "code": exception.code,
+                "message": exception.message,
+                "field": "structure",
+                "technical_detail": None,
+            }
+        },
+    )
 
 
 @app.exception_handler(ImageRecognitionError)

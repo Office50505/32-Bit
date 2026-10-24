@@ -3,6 +3,22 @@ export type EvidenceStatus = "MATCH" | "DIFFERENCE" | "NOT_AVAILABLE" | "OUTSIDE
 export type StepId = "source" | "confirm" | "validate" | "compare" | "report";
 export type AuditTab = "validation" | "standardization" | "properties" | "evidence" | "provenance";
 
+export interface CandidateSourceMention {
+  kind: "pdf-text" | "csv-row" | "image" | "manual";
+  page?: number;
+  row?: number;
+  locator: string;
+  excerpt: string;
+}
+
+export interface ExtractedSourceCandidate {
+  id: string;
+  label: string;
+  smiles: string;
+  confidence: "high" | "medium" | "needs-review";
+  mentions: CandidateSourceMention[];
+}
+
 export interface ValidationIssue {
   code: string;
   subcode?: string | null;
@@ -46,6 +62,7 @@ export interface MoleculeCandidate {
   id: string;
   label: string;
   smiles: string;
+  standardizedSmiles?: string | null;
   formula: string | null;
   weight: number | null;
   status: MoleculeStatus;
@@ -58,5 +75,16 @@ export interface MoleculeCandidate {
   confirmed: boolean;
   depictionSvg?: string | null;
   sourceFileSha256?: string | null;
+  sourcePage?: number | null;
+  sourceRow?: number | null;
+  sourceExcerpt?: string | null;
+  sourceMentions?: Array<{
+    kind: "pdf-text" | "csv-row" | "image" | "manual";
+    page?: number;
+    row?: number;
+    locator?: string;
+    excerpt?: string;
+  }>;
+  mentionCount: number;
   inputIndex: number;
 }

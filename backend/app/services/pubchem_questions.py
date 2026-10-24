@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal
 
 from app.models.evidence_assistant import (
@@ -40,6 +41,7 @@ PUBCHEM_PROPERTY_FIELDS = (
     "HBondAcceptorCount,RotatableBondCount"
 )
 FetchTransport = Callable[[str, float], bytes]
+_CACHE_WRITE_LOCK = Lock()
 
 
 class PubChemQuestionError(RuntimeError):
@@ -286,12 +288,16 @@ class FrozenPubChemClient:
             "title": record.title,
             "inchikey": record.inchikey,
         }
-        record_directory.mkdir(parents=True, exist_ok=False)
-        self._write_atomic(record_directory / "response.json", raw)
-        self._write_atomic(
-            record_directory / "manifest.json",
-            (_canonical_json(manifest) + "\n").encode("utf-8"),
-        )
+        with _CACHE_WRITE_LOCK:
+            cached = self._read_cached(record_directory, identifier=identifier)
+            if cached is not None:
+                return cached
+            record_directory.mkdir(parents=True, exist_ok=True)
+            self._write_atomic(record_directory / "response.json", raw)
+            self._write_atomic(
+                record_directory / "manifest.json",
+                (_canonical_json(manifest) + "\n").encode("utf-8"),
+            )
         return record
 
     def _read_cached(

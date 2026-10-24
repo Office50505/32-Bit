@@ -6,9 +6,13 @@ import Molecule3D from "./Molecule3D";
 interface SourceLandingProps {
   file: File | null;
   fileError: string;
+  fileNotice: string;
   fileHash: string | null;
   label: string;
   smiles: string;
+  candidateCount: number;
+  extracting: boolean;
+  reviewing: boolean;
   onFileSelect: (file?: File) => void | Promise<void>;
   onSmilesChange: (value: string) => void;
   onReview: () => void;
@@ -37,9 +41,13 @@ function formatFileSize(bytes: number) {
 export function SourceLanding({
   file,
   fileError,
+  fileNotice,
   fileHash,
   label,
   smiles,
+  candidateCount,
+  extracting,
+  reviewing,
   onFileSelect,
   onSmilesChange,
   onReview,
@@ -49,7 +57,7 @@ export function SourceLanding({
   const previewLabel = cleanSmiles ? label.trim() || "Untitled molecule" : DEFAULT_PREVIEW.label;
   const previewZoom = Math.max(0.76, Math.min(1.28, 1.42 - Math.max(0, previewSmiles.length - 5) * 0.04));
   const hashPending = Boolean(file && !fileHash && !fileError);
-  const canReview = Boolean(cleanSmiles && !hashPending);
+  const canReview = Boolean((cleanSmiles || candidateCount) && !hashPending && !extracting && !reviewing);
   const formulaSuggestion = FORMULA_TO_SMILES[cleanSmiles.toUpperCase()];
   const csvSelected = Boolean(file && (/\.csv$/i.test(file.name) || file.type === "text/csv"));
 
@@ -128,15 +136,25 @@ export function SourceLanding({
               </label>
 
               <button className="source-hero__submit" type="submit" disabled={!canReview}>
-                Review <ArrowRight size={17} strokeWidth={1.9} />
+                {extracting
+                  ? "Finding molecules…"
+                  : reviewing
+                    ? "Checking collection…"
+                    : candidateCount > 1
+                      ? `Review ${candidateCount} molecules`
+                      : candidateCount === 1
+                        ? "Review molecule"
+                        : "Review"}
+                <ArrowRight size={17} strokeWidth={1.9} />
               </button>
 
               <span className="source-hero__sr-title" id="source-file-help">
                 {file
                   ? `${formatFileSize(file.size)} · ${fileHash ? "Ready" : "Preparing…"}`
-                  : "PDF, image, or CSV with a SMILES column · 5 MB max"}
+                  : "PDF up to 25 MB · image or CSV up to 5 MB"}
               </span>
             </div>
+            {fileNotice ? <p className="source-hero__notice" role="status">{fileNotice}</p> : null}
             {fileError ? <p className="source-hero__error" id="source-file-error" role="alert">{fileError}</p> : null}
           </form>
         </div>

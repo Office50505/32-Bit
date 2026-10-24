@@ -94,6 +94,14 @@ class PropertyComparison(ApiModel):
     comparison_status: ResultStatus
 
 
+class SourceMentionMetadata(ApiModel):
+    kind: Literal["pdf-text", "csv-row", "image", "manual"]
+    page: int | None = Field(default=None, ge=1)
+    row: int | None = Field(default=None, ge=2)
+    locator: str | None = Field(default=None, max_length=200)
+    excerpt: str | None = Field(default=None, max_length=600)
+
+
 class SourceMetadata(ApiModel):
     filename: str | None = None
     source_type: Literal["direct-smiles", "photo", "paper", "csv"] | None = None
@@ -103,18 +111,26 @@ class SourceMetadata(ApiModel):
     file_size: int | None = Field(default=None, ge=0)
     file_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     extraction_method: str | None = None
+    row: int | None = Field(default=None, ge=2)
+    source_excerpt: str | None = Field(default=None, max_length=600)
+    mention_count: int | None = Field(default=None, ge=1)
+    mentions: list[SourceMentionMetadata] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_source_metadata(self) -> Self:
         if self.source_type == "direct-smiles":
             supplied_file_fields = (
                 self.filename,
+                self.page,
                 self.media_type,
                 self.file_size,
                 self.file_sha256,
                 self.extraction_method,
+                self.row,
+                self.source_excerpt,
+                self.mention_count,
             )
-            if any(value is not None for value in supplied_file_fields):
+            if any(value is not None for value in supplied_file_fields) or self.mentions:
                 raise ValueError("direct SMILES input cannot include file metadata")
             return self
         if self.source_type in {"photo", "paper", "csv"}:
@@ -140,6 +156,8 @@ class SourceMetadata(ApiModel):
                 raise ValueError("photo sources must be PNG, JPEG, or WebP")
             if self.source_type == "csv" and self.media_type != "text/csv":
                 raise ValueError("CSV sources must use the text/csv media type")
+            if self.mention_count is not None and self.mention_count != len(self.mentions):
+                raise ValueError("mention_count must match the number of source mentions")
         return self
 
 
@@ -172,6 +190,32 @@ class RunManifest(ApiModel):
     snapshot_id: str
     snapshot_scope: str
     tool_versions: ToolVersions
+
+
+class ConformerAtom(ApiModel):
+    element: str
+    x: float
+    y: float
+    z: float
+    formal_charge: int = 0
+
+
+class ConformerBond(ApiModel):
+    begin: int = Field(ge=0)
+    end: int = Field(ge=0)
+    order: float = Field(gt=0)
+
+
+class Conformer3D(ApiModel):
+    method: str
+    structure_role: Literal["standardized-parent"] = "standardized-parent"
+    coordinate_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    atoms: list[ConformerAtom]
+    bonds: list[ConformerBond]
+
+
+class ConformerRequest(ApiModel):
+    structure: str = Field(min_length=1, max_length=20_000)
 
 
 class AnalyzeResponse(ApiModel):
@@ -254,4 +298,39 @@ class ImageExtractionResponse(ApiModel):
     confidence_mean: float | None = Field(default=None, ge=0, le=1)
     confidence_min: float | None = Field(default=None, ge=0, le=1)
     token_confidences: list[TokenConfidence] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DocumentMention(ApiModel):
+    page: int = Field(ge=1)
+    excerpt: str = Field(max_length=600)
+    label: str | None = Field(default=None, max_length=200)
+    locator: str = Field(max_length=200)
+    extraction_method: Literal["tagged-smiles", "structure-token"]
+
+
+class DocumentMoleculeCandidate(ApiModel):
+    candidate_id: str
+    label: str = Field(max_length=200)
+    smiles: str
+    canonical_smiles: str | None = None
+    confidence: Literal["high", "medium", "needs-review"]
+    mentions: list[DocumentMention] = Field(min_length=1)
+    mention_count: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_mention_count(self) -> Self:
+        if self.mention_count != len(self.mentions):
+            raise ValueError("mention_count must match the number of source mentions")
+        return self
+
+
+class DocumentExtractionResponse(ApiModel):
+    status: Literal["candidates"] = "candidates"
+    source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    filename: str
+    media_type: Literal["application/pdf"] = "application/pdf"
+    method: Literal["PDF-text-SMILES-extractor"] = "PDF-text-SMILES-extractor"
+    total_mentions: int = Field(ge=0)
+    candidates: list[DocumentMoleculeCandidate]
     warnings: list[str] = Field(default_factory=list)

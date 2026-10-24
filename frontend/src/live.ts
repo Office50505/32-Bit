@@ -33,6 +33,7 @@ export function fromApi(result: AnalyzeResponse, inputIndex = 0): MoleculeCandid
   const issue = issues[0];
   return {
     id: `${result.analysis_id}-${inputIndex}`, label: result.label, smiles: result.raw_input,
+    standardizedSmiles: result.standardized_smiles,
     formula: formula == null ? null : String(formula), weight: typeof weight === "number" ? weight : null,
     status: result.status, source: result.source?.filename ?? result.source?.source_type ?? "Direct SMILES",
     issue: issue ?? null, issues,
@@ -40,6 +41,10 @@ export function fromApi(result: AnalyzeResponse, inputIndex = 0): MoleculeCandid
       before: step.before_smiles, after: step.after_smiles, changed: step.changed })),
     descriptors: result.properties.map(mapProperty), confirmed: true, depictionSvg: result.depiction_svg,
     sourceFileSha256: result.source?.file_sha256, inputIndex,
+    sourcePage: result.source?.page, sourceRow: result.source?.row,
+    sourceExcerpt: result.source?.source_excerpt,
+    sourceMentions: result.source?.mentions,
+    mentionCount: result.source?.mention_count ?? result.source?.mentions?.length ?? 1,
     manifest: { analysisId: result.analysis_id, inputSha256: result.manifest.input_sha256,
       outputSha256: result.manifest.output_sha256, configurationSha256: result.manifest.configuration_sha256,
       rdkitVersion: result.manifest.tool_versions.rdkit, snapshotId: result.manifest.snapshot_id,

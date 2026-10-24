@@ -3,12 +3,15 @@ import type {
   AnalyzeResponse,
   ApiErrorResponse,
   BatchAnalyzeResponse,
+  Conformer3D,
+  DocumentExtractionResponse,
   ExtractionEngineStatus,
   ImageExtractionResponse,
   RunResponse,
 } from "../schemas/analysis";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+const conformerCache = new Map<string, Promise<Conformer3D>>();
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -133,6 +136,43 @@ export async function extractMoleculeImage(
   }, 120_000);
   if (!response.ok) throw new Error(await readApiError(response));
   return (await response.json()) as ImageExtractionResponse;
+}
+
+export async function extractMoleculeDocument(
+  document: File,
+  signal?: AbortSignal,
+): Promise<DocumentExtractionResponse> {
+  const body = new FormData();
+  body.append("document", document, document.name);
+  const response = await fetchWithTimeout("/api/extract/document", {
+    method: "POST",
+    body,
+    signal,
+  }, 120_000);
+  if (!response.ok) throw new Error(await readApiError(response));
+  return (await response.json()) as DocumentExtractionResponse;
+}
+
+export function getComputedConformer(
+  structure: string,
+  signal?: AbortSignal,
+): Promise<Conformer3D> {
+  const cached = conformerCache.get(structure);
+  if (cached && !signal) return cached;
+  const request = fetchWithTimeout("/api/conformer", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ structure }),
+    signal,
+  }, 45_000).then(async (response) => {
+    if (!response.ok) throw new Error(await readApiError(response));
+    return (await response.json()) as Conformer3D;
+  });
+  if (!signal) {
+    conformerCache.set(structure, request);
+    void request.catch(() => conformerCache.delete(structure));
+  }
+  return request;
 }
 
 async function readExtractionEngine(

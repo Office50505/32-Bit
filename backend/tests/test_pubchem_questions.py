@@ -1,5 +1,7 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 from app.models.evidence_assistant import ClaimCheckRequest, Verdict
 from app.services.pubchem_questions import (
@@ -82,6 +84,22 @@ def test_pubchem_question_fetches_once_then_reuses_verified_snapshot(tmp_path: P
     assert verdict.citations[1].source_record_id == "PUBCHEM:CID:71080"
     assert all("pubchem-pug-cid" in item.snapshot_id for item in verdict.citations)
     assert first.manifest.model_name == "deterministic-pubchem-structure-v1"
+
+
+def test_concurrent_snapshot_writes_share_one_valid_cache_record(tmp_path: Path) -> None:
+    barrier = Barrier(2)
+
+    def transport(_url: str, _timeout: float) -> bytes:
+        barrier.wait(timeout=2)
+        return pubchem_payload("L-Alanine")
+
+    client = FrozenPubChemClient(tmp_path, transport=transport)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(client.get, "L-Alanine") for _ in range(2)]
+        records = [future.result(timeout=5) for future in futures]
+
+    assert records[0] == records[1]
+    assert client.get("L-Alanine") == records[0]
 
 
 def test_non_molecule_chat_falls_through_without_an_api_call(tmp_path: Path) -> None:

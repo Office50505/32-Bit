@@ -18,6 +18,7 @@ load_dotenv()
 
 FAL_OPENROUTER_BASE_URL = "https://fal.run/openrouter/router/openai/v1"
 DEFAULT_MODEL = "google/gemini-2.5-flash"
+_FAL_API_KEY: str | None = None
 OUT_OF_SCOPE_ANSWER = (
     "I can only help with ProvenanceLab, molecular structures, SMILES, atoms, bonds, "
     "validation, and the project's evidence workflow."
@@ -97,6 +98,13 @@ class BenzoServiceError(RuntimeError):
     """Raised when the configured fal/OpenRouter Benzo service cannot answer."""
 
 
+def configure_fal_api_key(api_key: str) -> None:
+    """Configure the application-owned fal credential."""
+    global _FAL_API_KEY
+    _FAL_API_KEY = api_key.strip() or None
+    get_benzo_assistant.cache_clear()
+
+
 def _is_project_related(request: BenzoChatRequest) -> bool:
     normalized = request.question.casefold()
     if any(term in normalized for term in PROJECT_TERMS):
@@ -123,13 +131,15 @@ class FalBenzoAssistant:
     ) -> None:
         self.model = model or os.environ.get("FAL_BENZO_MODEL", DEFAULT_MODEL)
         self._client = client
-        self._api_key = api_key or os.environ.get("FAL_KEY")
+        self._api_key = api_key or _FAL_API_KEY
 
     def _fal_client(self) -> Any:
         if self._client is not None:
             return self._client
         if not self._api_key:
-            raise BenzoServiceError("FAL_KEY is not configured on the ProvenanceLab backend.")
+            raise BenzoServiceError(
+                "The fal API key is not configured in backend/app/main.py."
+            )
         self._client = OpenAI(
             base_url=FAL_OPENROUTER_BASE_URL,
             api_key="not-needed",
@@ -173,8 +183,8 @@ class FalBenzoAssistant:
             )
         except AuthenticationError as error:
             raise BenzoServiceError(
-                "fal rejected the configured API key. Replace FAL_KEY in the backend .env file "
-                "with an active fal key."
+                "fal rejected the configured API key. Replace FAL_KEY in "
+                "backend/app/main.py with an active fal key."
             ) from error
         except OpenAIError as error:
             raise BenzoServiceError(

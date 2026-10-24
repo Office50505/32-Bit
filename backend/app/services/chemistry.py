@@ -641,7 +641,11 @@ def analyze_structure(request: AnalyzeRequest) -> AnalyzeResponse:
         status=status,
         canonical_smiles=canonical_smiles,
         standardized_smiles=standardized_smiles,
-        depiction_svg=_depict(depiction_mol, highlight_atoms, highlight_bonds),
+        depiction_svg=(
+            _depict(depiction_mol, highlight_atoms, highlight_bonds)
+            if molecule is not None
+            else None
+        ),
         issues=issues,
         standardization_steps=steps,
         properties=properties,

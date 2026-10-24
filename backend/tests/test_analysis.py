@@ -11,6 +11,16 @@ def analyze(structure: str, label: str = "Test molecule") -> dict:
     return response.json()
 
 
+def test_direct_smiles_source_accepts_no_file_metadata() -> None:
+    response = client.post(
+        "/api/analyze",
+        json={"structure": "CCO", "source": {"source_type": "direct-smiles"}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"]["source_type"] == "direct-smiles"
+
+
 def test_aspirin_is_valid_and_computed() -> None:
     result = analyze("CC(=O)Oc1ccccc1C(=O)O", "Aspirin")
     assert result["status"] == "valid"
@@ -70,6 +80,17 @@ def test_csv_source_metadata_is_preserved() -> None:
         "file_size": 128,
         "file_sha256": "b" * 64,
         "extraction_method": "csv-smiles-column",
+        "row": 2,
+        "source_excerpt": "Aspirin,CC(=O)Oc1ccccc1C(=O)O",
+        "mention_count": 1,
+        "mentions": [
+            {
+                "kind": "csv-row",
+                "row": 2,
+                "locator": "Row 2",
+                "excerpt": "Aspirin,CC(=O)Oc1ccccc1C(=O)O",
+            }
+        ],
     }
     response = client.post(
         "/api/analyze",
@@ -77,4 +98,13 @@ def test_csv_source_metadata_is_preserved() -> None:
     )
 
     assert response.status_code == 200
-    assert all(response.json()["source"][key] == value for key, value in source.items())
+    returned_source = response.json()["source"]
+    assert all(
+        returned_source[key] == value
+        for key, value in source.items()
+        if key != "mentions"
+    )
+    assert all(
+        returned_source["mentions"][0][key] == value
+        for key, value in source["mentions"][0].items()
+    )

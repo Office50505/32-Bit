@@ -7,6 +7,7 @@ import {
   type MoleculeSketch,
   type SketchAtom,
 } from "./moleculeSketch";
+import type { Conformer3D } from "./schemas/analysis";
 
 interface Props {
   smiles: string;
@@ -17,6 +18,7 @@ interface Props {
   zoom: number;
   compact?: boolean;
   appearance?: "workspace" | "hero";
+  conformer?: Conformer3D | null;
 }
 
 interface ProjectedPoint {
@@ -43,6 +45,39 @@ const DEFAULT_VIEW: ViewState = {
   previousX: 0,
   previousY: 0,
 };
+
+function modelFromConformer(conformer: Conformer3D): MoleculeSketch {
+  const atoms: SketchAtom[] = conformer.atoms.map((atom) => ({
+    element: atom.element,
+    x: atom.x,
+    y: atom.y,
+    z: atom.z,
+    aromatic: false,
+    charge: atom.formal_charge,
+    stereo: false,
+    sourceToken: atom.element,
+    sourceStart: 0,
+    sourceEnd: 0,
+  }));
+  const bonds = conformer.bonds.map((bond) => ({
+    a: bond.begin,
+    b: bond.end,
+    order: bond.order,
+  }));
+  let extent = 2.8;
+  atoms.forEach((atom) => {
+    extent = Math.max(extent, Math.hypot(atom.x, atom.y, atom.z));
+  });
+  return {
+    atoms,
+    bonds,
+    viewSize: Math.max(7.6, extent * 2.25),
+    atomScale: atoms.length > 48 ? 0.5 : atoms.length > 28 ? 0.64 : atoms.length > 16 ? 0.78 : 1,
+    ringCount: 0,
+    stereoCount: 0,
+    valenceIssues: [],
+  };
+}
 
 function project(
   atom: SketchAtom,
@@ -226,13 +261,17 @@ export default function Molecule3D({
   zoom,
   compact = false,
   appearance = "workspace",
+  conformer,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<ViewState>({ ...DEFAULT_VIEW });
   const renderPropsRef = useRef({ autorotate, highlightedAtoms, zoom });
   renderPropsRef.current = { autorotate, highlightedAtoms, zoom };
-  const result = useMemo(() => parseSmilesSketch(smiles), [smiles]);
+  const result = useMemo(
+    () => conformer ? { model: modelFromConformer(conformer) } : parseSmilesSketch(smiles),
+    [conformer, smiles],
+  );
 
   useEffect(() => {
     viewRef.current = { ...DEFAULT_VIEW };

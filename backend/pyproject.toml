@@ -11,6 +11,7 @@ dependencies = [
   "fastapi>=0.118,<1",
   "openai>=2.8,<3",
   "pillow>=11,<13",
+  "pypdf>=6,<7",
   "pydantic>=2.11,<3",
   "python-dotenv>=1.0,<2",
   "python-multipart>=0.0.20,<1",
