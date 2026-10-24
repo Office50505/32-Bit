@@ -13,10 +13,97 @@
   min-height: 300px;
 }
 
-/* The WebGL drawing buffer scales with devicePixelRatio; its CSS box must not. */
-.molecule-3d canvas {
+.molecule-3d {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  background: #f8fbfb;
+}
+
+/* The canvas drawing buffer scales with devicePixelRatio; its CSS box must not. */
+.molecule-3d canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.molecule-3d canvas:active {
+  cursor: grabbing;
+}
+
+.viewer-canvas--3d {
+  background: #f8fbfb;
+  border-color: #dce7e9;
+}
+
+.viewer-mode-note {
+  color: #718590;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.molecule-3d__hint {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  color: #4f7078;
+  background: rgb(255 255 255 / 88%);
+  border: 1px solid #d9e6e8;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 160ms ease;
+}
+
+.molecule-3d[data-interacted="true"] .molecule-3d__hint {
+  opacity: 0;
+}
+
+.molecule-3d--fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 24px;
+  color: #667c87;
+  text-align: center;
+}
+
+.molecule-3d--fallback strong {
+  color: #314c58;
+  font: 700 15px Georgia, "Times New Roman", serif;
+}
+
+.molecule-3d--fallback span {
+  max-width: 320px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.candidate-visual .molecule-3d,
+.modal-candidate-graph .molecule-3d {
+  min-height: 0;
+}
+
+.viewer-watermark {
+  top: 8px;
+  bottom: auto;
+  z-index: 2;
+  color: #52747b;
+  background: rgb(255 255 255 / 88%);
+  border: 1px solid #dce8e9;
 }
 
 @media (max-width: 760px) {
@@ -37,5 +124,9 @@
 
   .atom-callout {
     font-size: 10px;
+  }
+
+  .molecule-3d__hint {
+    bottom: 10px;
   }
 }

@@ -1,4 +1,4 @@
-import type { Atom3D, Bond3D, DescriptorRecord, MoleculeCandidate } from "./domain";
+import type { DescriptorRecord, MoleculeCandidate } from "./domain";
 
 const unavailable = "This property is outside the small bootstrap demo dataset. No claim is made about PubChem or ChEMBL.";
 const labels = [
@@ -80,30 +80,3 @@ export const DEMO_MOLECULES: MoleculeCandidate[] = [
     manifest: demoManifest("DEMO-ROW-14"),
   },
 ];
-
-export const DEMO_GEOMETRY: Record<string, { atoms: Atom3D[]; bonds: Bond3D[] }> = {
-  aspirin: {
-    atoms: [
-      { element: "C", position: [-1.5, 1, 0] }, { element: "C", position: [-0.4, 1.6, 0] },
-      { element: "C", position: [0.8, 1, 0] }, { element: "C", position: [0.8, -0.4, 0] },
-      { element: "C", position: [-0.4, -1, 0] }, { element: "C", position: [-1.5, -0.4, 0] },
-      { element: "O", position: [-2.6, 1.7, 0.2] }, { element: "C", position: [-3.8, 1.2, 0.3] },
-      { element: "O", position: [-4.6, 2.1, 0.3] }, { element: "C", position: [-4.1, -0.1, 0.4] },
-      { element: "C", position: [2.1, 1.7, 0.2] }, { element: "O", position: [3.2, 1.1, 0.2] },
-      { element: "O", position: [2.1, 3, 0.2] },
-    ],
-    bonds: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 6], [6, 7], [7, 8], [7, 9], [2, 10], [10, 11], [10, 12]].map(([from, to]) => ({ from, to })),
-  },
-  "compound-7b": {
-    atoms: [
-      { element: "C", position: [-2, -0.3, 0] }, { element: "C", position: [-0.8, 0.4, 0] },
-      { element: "C", position: [0.5, -0.2, 0] }, { element: "O", position: [1, 1.1, 0.3] },
-      { element: "C", position: [1.7, -0.9, 0] },
-    ],
-    bonds: [[0, 1], [1, 2], [2, 3], [2, 4]].map(([from, to]) => ({ from, to })),
-  },
-  "source-row-14": {
-    atoms: Array.from({ length: 9 }, (_, index) => ({ element: index === 6 ? "O" as const : "C" as const, position: [index < 7 ? index * 0.8 - 2.5 : 2.2, index < 7 ? (index % 2) * 0.45 : index === 7 ? 1.5 : -1, 0] as [number, number, number] })),
-    bonds: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [6, 8]].map(([from, to]) => ({ from, to })),
-  },
-};

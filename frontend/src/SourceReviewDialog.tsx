@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { Check, Pencil, X } from "lucide-react";
 import type { MoleculeCandidate } from "./domain";
 import { Molecule2D } from "./Molecule2D";
+import Molecule3D from "./Molecule3D";
 
 interface Props {
   dialogRef: RefObject<HTMLDialogElement | null>;
@@ -30,7 +31,7 @@ export function SourceReviewDialog({ dialogRef, molecule, sourceUrl, sourceFile,
       </section>
       <section className="modal-candidate-pane" aria-label="Proposed chemical structure">
         <span className="modal-pane-label">UNTRUSTED CANDIDATE</span><h3>{molecule.label}</h3>
-        <div className="modal-candidate-graph"><Molecule2D molecule={molecule} compact /></div>
+        <div className="modal-candidate-graph"><Molecule3D smiles={molecule.smiles} label={molecule.label} autorotate={false} showLabels resetSignal={0} zoom={0.9} compact /></div>
         <dl><div><dt>Proposed SMILES</dt><dd><code>{molecule.smiles}</code></dd></div><div><dt>Status</dt><dd>{molecule.status.toUpperCase()}</dd></div></dl>
         <p>Confirm only if the graph and transcription match the source. The demo values are illustrative.</p>
       </section>

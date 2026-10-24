@@ -1,13 +1,13 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { AlertCircle, ArrowRight, BookOpen, CheckCircle2, FileText, Maximize2, Minus,
   Pencil, Plus, RotateCcw, Search } from "lucide-react";
-import type { AuditTab, MoleculeCandidate, StepId, ViewerStyle } from "./domain";
+import type { AuditTab, MoleculeCandidate, StepId } from "./domain";
 import { Molecule2D } from "./Molecule2D";
 import { LiveMoleculeSvg } from "./LiveMoleculeSvg";
+import Molecule3D from "./Molecule3D";
 import { CompareTable } from "./CompareTable";
 import { EvidenceStatusBadge, MoleculeStatusBadge } from "./StatusBadge";
 
-const Molecule3D = lazy(() => import("./Molecule3D"));
 const tabs: { id: AuditTab; label: string }[] = [
   { id: "validation", label: "Validation" }, { id: "standardization", label: "Standardization" },
   { id: "properties", label: "Properties" }, { id: "evidence", label: "Evidence" },
@@ -31,13 +31,12 @@ export function ValidationDesk({ step, molecules, selected, filtered, search, on
   onAddSource, onEdit, onReviewSource }: Props) {
   const [tab, setTab] = useState<AuditTab>("validation");
   const [view, setView] = useState<"2d" | "3d">("3d");
-  const [style, setStyle] = useState<ViewerStyle>("ball-stick");
   const [autorotate, setAutorotate] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [resetSignal, setResetSignal] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
   const [issueTip, setIssueTip] = useState(false);
-  const effectiveView = selected.manifest.mode === "live" ? "2d" : view;
 
   function changeZoom(direction: number) {
     setZoom((current) => Math.max(0.65, Math.min(1.55, current + direction * 0.12)));
@@ -59,26 +58,35 @@ export function ValidationDesk({ step, molecules, selected, filtered, search, on
       </div>
 
       <div className="viewer-panel panel">
-        <div className="viewer-heading"><div><h2>3-D Molecular View</h2><p>{selected.label} · {selected.manifest.mode === "demo" ? "illustrative geometry" : "RDKit 2D depiction"}</p></div>
+        <div className="viewer-heading"><div><h2>Molecular view</h2><p>{selected.label} · {view === "3d" ? "SMILES connectivity · illustrative 3D layout" : "RDKit 2D depiction"}</p></div>
           <div className="view-switch" role="group" aria-label="View dimension">
-            <button className={effectiveView === "2d" ? "active" : ""} onClick={() => setView("2d")}>2D view</button>
-            <button className={effectiveView === "3d" ? "active" : ""} onClick={() => setView("3d")}
-              disabled={selected.manifest.mode === "live"} title={selected.manifest.mode === "live" ? "No verified 3D conformer is available" : undefined}>3D View</button>
+            <button className={view === "2d" ? "active" : ""} onClick={() => setView("2d")}>2D view</button>
+            <button className={view === "3d" ? "active" : ""} onClick={() => setView("3d")}>3D sketch</button>
           </div>
         </div>
-        <div className="viewer-options"><label>Style <span className="select-wrap"><select value={style} onChange={(event) => setStyle(event.target.value as ViewerStyle)} disabled={effectiveView === "2d"}>
-          <option value="ball-stick">Ball & Stick</option><option value="space-filling">Space-filling</option><option value="wireframe">Wireframe</option>
-        </select></span></label><label className="toggle-label">Autorotate <input type="checkbox" checked={autorotate} onChange={(event) => setAutorotate(event.target.checked)} disabled={effectiveView === "2d"} /><span className="toggle-track" /></label></div>
-        <div className={`viewer-canvas ${effectiveView === "3d" ? "viewer-canvas--dark" : "viewer-canvas--2d"}`}>
-          {selected.manifest.mode === "live" ? <LiveMoleculeSvg svg={selected.depictionSvg} />
-            : effectiveView === "2d" ? <Molecule2D molecule={selected} zoom={zoom} onIssueClick={() => setIssueTip((current) => !current)} />
-              : <Suspense fallback={<div className="viewer-loading">Loading interactive 3D viewer…</div>}>
-                <Molecule3D key={selected.id} moleculeId={selected.id} style={style} autorotate={autorotate}
-                  highlightedAtom={selected.issue?.severity === "error" ? selected.issue.atomIndex : undefined}
-                  resetSignal={resetSignal} zoom={zoom} />
-              </Suspense>}
-          {effectiveView === "2d" && selected.status === "invalid" && issueTip && <span className="atom-tooltip">Oxygen atom 7: impossible valence</span>}
-          {effectiveView === "3d" && <span className="viewer-watermark">Illustrative coordinates · not an optimized conformer</span>}
+        <div className="viewer-options">
+          {view === "3d" ? <>
+            <label className="toggle-label">Atom labels <input type="checkbox" checked={showLabels} onChange={(event) => setShowLabels(event.target.checked)} /><span className="toggle-track" /></label>
+            <label className="toggle-label">Autorotate <input type="checkbox" checked={autorotate} onChange={(event) => setAutorotate(event.target.checked)} /><span className="toggle-track" /></label>
+          </> : <span className="viewer-mode-note">Evidence-backed 2D depiction</span>}
+        </div>
+        <div className={`viewer-canvas ${view === "3d" ? "viewer-canvas--3d" : "viewer-canvas--2d"}`}>
+          {view === "2d"
+            ? selected.manifest.mode === "live"
+              ? <LiveMoleculeSvg svg={selected.depictionSvg} />
+              : <Molecule2D molecule={selected} zoom={zoom} onIssueClick={() => setIssueTip((current) => !current)} />
+            : <Molecule3D
+                key={selected.id}
+                smiles={selected.smiles}
+                label={selected.label}
+                autorotate={autorotate}
+                showLabels={showLabels}
+                highlightedAtoms={selected.issue?.atomIndex === undefined ? [] : [selected.issue.atomIndex]}
+                resetSignal={resetSignal}
+                zoom={zoom}
+              />}
+          {view === "2d" && selected.status === "invalid" && issueTip && <span className="atom-tooltip">Oxygen atom 7: impossible valence</span>}
+          {view === "3d" && <span className="viewer-watermark">Illustrative coordinates · connectivity comes from SMILES</span>}
         </div>
         <div className="viewer-toolbar"><div className="zoom-control"><button onClick={() => changeZoom(-1)} aria-label="Zoom out"><Minus size={17} /></button><span>{Math.round(zoom * 100)}%</span><button onClick={() => changeZoom(1)} aria-label="Zoom in"><Plus size={17} /></button></div>
           <button onClick={() => setFullScreen((current) => !current)}><Maximize2 size={17} /> {fullScreen ? "Exit fullscreen" : "Expand"}</button>
