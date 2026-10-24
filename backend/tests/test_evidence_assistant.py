@@ -226,9 +226,25 @@ def test_invalid_model_citation_fails_closed_to_low_confidence_abstention(
     verdict = assistant.check_claim(ClaimCheckRequest(claim="claim")).verdicts[0]
     assert verdict.verdict == Verdict.INSUFFICIENT_EVIDENCE
     assert verdict.reason_codes == [DecisionReasonCode.MODEL_OUTPUT_REJECTED]
-    assert verdict.citations == []
+    assert [citation.source_record_id for citation in verdict.citations] == ["ACT-1"]
     assert verdict.confidence.level == ConfidenceLevel.LOW
     assert verdict.confidence.factor_scores["synthesis_validity"] == 0.0
+
+
+def test_large_packets_are_compacted_before_local_model_synthesis(tmp_path: Path) -> None:
+    values = [(1 if index % 2 == 0 else 100, "nM") for index in range(40)]
+    store = make_store(tmp_path, values)
+    model = FakeModel(ClaimDecomposition(statements=[activity_statement()]))
+    assistant = EvidenceAssistant(
+        store=store,
+        snapshot_ids=(SNAPSHOT_ID,),
+        model=model,  # type: ignore[arg-type]
+    )
+    verdict = assistant.check_claim(ClaimCheckRequest(claim="claim")).verdicts[0]
+    assert verdict.verdict == Verdict.SUPPORTED
+    assert len(model.verdict_packets) == 1
+    assert len(model.verdict_packets[0].evidence_items) <= 1
+    assert model.verdict_packets[0].conflict_assessment.disagreements == []
 
 
 def test_clinical_claim_is_out_of_scope_without_scientific_citation(tmp_path: Path) -> None:

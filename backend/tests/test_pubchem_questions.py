@@ -1,0 +1,88 @@
+import json
+from pathlib import Path
+
+from app.models.evidence_assistant import ClaimCheckRequest, Verdict
+from app.services.pubchem_questions import (
+    FrozenPubChemClient,
+    PubChemQuestionAssistant,
+    parse_molecule_question,
+)
+
+
+def pubchem_payload(name: str) -> bytes:
+    is_l = name == "L-Alanine"
+    return json.dumps(
+        {
+            "PropertyTable": {
+                "Properties": [
+                    {
+                        "CID": 5950 if is_l else 71080,
+                        "Title": name,
+                        "IUPACName": (
+                            "(2S)-2-aminopropanoic acid"
+                            if is_l
+                            else "(2R)-2-aminopropanoic acid"
+                        ),
+                        "ConnectivitySMILES": "CC(C(=O)O)N",
+                        "SMILES": "C[C@@H](C(=O)O)N" if is_l else "C[C@H](C(=O)O)N",
+                        "InChIKey": (
+                            "QNAYBMKLOCPYGJ-REOHCLBHSA-N"
+                            if is_l
+                            else "QNAYBMKLOCPYGJ-UWTATZPHSA-N"
+                        ),
+                        "MolecularFormula": "C3H7NO2",
+                        "MolecularWeight": "89.09",
+                    }
+                ]
+            }
+        },
+        separators=(",", ":"),
+    ).encode()
+
+
+def test_parser_normalizes_stereo_comparison_word_orders() -> None:
+    first = parse_molecule_question("What is the difference between alanine L and D?")
+    second = parse_molecule_question("difference between L and D alanine")
+    assert first is not None
+    assert second is not None
+    assert first.names == ("L-alanine", "D-alanine")
+    assert second.names == ("L-alanine", "D-alanine")
+
+
+def test_pubchem_question_fetches_once_then_reuses_verified_snapshot(tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def transport(url: str, _timeout: float) -> bytes:
+        calls.append(url)
+        name = "L-Alanine" if "L-alanine" in url else "D-Alanine"
+        return pubchem_payload(name)
+
+    client = FrozenPubChemClient(tmp_path, transport=transport)
+    assistant = PubChemQuestionAssistant(client)
+    request = ClaimCheckRequest(
+        claim="What is the difference between alanine L and D?"
+    )
+    first = assistant.try_check(request)
+    second = assistant.try_check(request)
+
+    assert first is not None
+    assert first == second
+    assert len(calls) == 2
+    verdict = first.verdicts[0]
+    assert verdict.verdict == Verdict.SUPPORTED
+    assert "enantiomers" in verdict.reason
+    assert len(verdict.citations) == 2
+    assert verdict.citations[0].source_record_id == "PUBCHEM:CID:5950"
+    assert verdict.citations[1].source_record_id == "PUBCHEM:CID:71080"
+    assert all("pubchem-pug-cid" in item.snapshot_id for item in verdict.citations)
+    assert first.manifest.model_name == "deterministic-pubchem-structure-v1"
+
+
+def test_non_molecule_chat_falls_through_without_an_api_call(tmp_path: Path) -> None:
+    def unexpected_transport(_url: str, _timeout: float) -> bytes:
+        raise AssertionError("transport must not be called")
+
+    assistant = PubChemQuestionAssistant(
+        FrozenPubChemClient(tmp_path, transport=unexpected_transport)
+    )
+    assert assistant.try_check(ClaimCheckRequest(claim="hey")) is None

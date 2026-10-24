@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 
+import { BenzoAssistant } from "./BenzoAssistant";
 import {
   analyzeMolecule,
   createAnalysisRun,
@@ -415,5 +416,6 @@ export default function App() {
       </main></div>
 
     {selected ? <SourceReviewDialog dialogRef={sourceDialogRef} molecule={selected} sourceUrl={selectedSource?.url ?? null} sourceFile={selectedSource?.file ?? null} sourceHash={selected.sourceFileSha256 ?? null} onReject={() => void rejectReviewedCandidate()} onEdit={editReviewedCandidate} onConfirm={() => sourceDialogRef.current?.close()} /> : null}
+    <BenzoAssistant />
   </div>;
 }

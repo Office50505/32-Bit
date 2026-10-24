@@ -156,7 +156,11 @@ def test_verdict_call_uses_packet_schema() -> None:
         reason="No direct evidence was supplied.",
         reason_codes=["NO_DIRECT_EVIDENCE"],
     )
-    transport = FakeTransport(verdict.model_dump_json())
+    transport = FakeTransport(
+        verdict.model_dump_json(include={
+            "statement_id", "verdict", "citation_ids", "reason"
+        })
+    )
     client = OllamaClient(config(), transport=transport)
     packet = EvidencePacket(
         statement=AtomicStatement(
@@ -178,6 +182,9 @@ def test_verdict_call_uses_packet_schema() -> None:
     chat_payload = next(call[2] for call in transport.calls if call[1] == "/api/chat")
     assert chat_payload is not None
     assert chat_payload["format"]["title"] == "VerdictProposal"
+    prompt = chat_payload["messages"][1]["content"]
+    assert "evidence_items" in prompt
+    assert "raw_record_sha256" not in prompt
 
 
 def test_model_verification_is_cached_between_calls() -> None:

@@ -10,9 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.models.evidence_assistant import (
     ClaimCheckRequest,
     ClaimDecomposition,
+    DecisionReasonCode,
     EvidencePacket,
+    Verdict,
     VerdictProposal,
 )
+from app.services.verdict_validation import default_insufficient_reason
 
 JsonObject = dict[str, Any]
 Transport = Callable[[str, str, JsonObject | None, float], JsonObject]
@@ -37,7 +40,49 @@ computed-only evidence for biological activity, unresolved disagreement, or miss
 evidence. Use OUT_OF_SCOPE for clinical efficacy, safety prediction, personalized treatment, or
 unsupported future efficacy. Cite only evidence_id values present in the packet. Never use a
 retracted item to support or contradict. Do not provide hidden reasoning or text outside JSON.
-Deterministic code will reject any verdict that violates these rules."""
+Deterministic code will reject any verdict that violates these rules. Keep the reason below 25
+words and cite exactly one strongest record for a decisive verdict."""
+
+
+def _verdict_prompt(packet: EvidencePacket) -> str:
+    """Serialize only decision-relevant fields for the local synthesis model."""
+
+    payload = {
+        "statement": packet.statement.model_dump(mode="json"),
+        "resolution": packet.resolution.model_dump(mode="json", exclude_none=True),
+        "evidence_items": [
+            item.model_dump(
+                mode="json",
+                include={
+                    "evidence_id",
+                    "source_type",
+                    "basis",
+                    "stance",
+                    "directness",
+                    "molecule_inchikey",
+                    "target_id",
+                    "organism",
+                    "endpoint",
+                    "relation",
+                    "value",
+                    "unit",
+                    "retraction_status",
+                    "quality_flags",
+                },
+                exclude_none=True,
+            )
+            for item in packet.evidence_items
+        ],
+        "conflict_assessment": {
+            "decision_conflict": packet.conflict_assessment.decision_conflict,
+            "summary": packet.conflict_assessment.summary,
+            "disagreements": [
+                disagreement.model_dump(mode="json", exclude_none=True)
+                for disagreement in packet.conflict_assessment.disagreements
+            ],
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 class OllamaError(RuntimeError):
@@ -122,6 +167,15 @@ class _ModelDecomposition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     statements: list[_ModelStatement] = Field(min_length=1, max_length=10)
+
+
+class _ModelVerdict(BaseModel):
+    model_config = ConfigDict(extra="forbid", title="VerdictProposal")
+
+    statement_id: str = Field(pattern=r"^S[1-9][0-9]*$")
+    verdict: Verdict
+    citation_ids: list[str] = Field(default_factory=list, max_length=1)
+    reason: str = Field(min_length=1, max_length=160)
 
 
 class OllamaClient:
@@ -258,13 +312,27 @@ class OllamaClient:
         return StructuredModelResult(value=decomposition, metadata=model_result.metadata)
 
     def propose_verdict(self, packet: EvidencePacket) -> StructuredModelResult[VerdictProposal]:
-        prompt = packet.model_dump_json(exclude_none=False)
+        prompt = _verdict_prompt(packet)
         if len(prompt) > 60_000:
             raise OllamaProtocolError("evidence packet exceeds the configured compact-prompt limit")
-        return self._structured_chat(
+        model_result = self._structured_chat(
             system_prompt=VERDICT_SYSTEM_PROMPT,
             user_prompt=prompt,
-            output_type=VerdictProposal,
+            output_type=_ModelVerdict,
+        )
+        reason_codes = []
+        if model_result.value.verdict == Verdict.INSUFFICIENT_EVIDENCE:
+            reason_codes = [
+                DecisionReasonCode.CONFLICTING_ASSAYS
+                if packet.conflict_assessment.disagreements
+                else default_insufficient_reason(packet)
+            ]
+        return StructuredModelResult(
+            value=VerdictProposal(
+                **model_result.value.model_dump(mode="json"),
+                reason_codes=reason_codes,
+            ),
+            metadata=model_result.metadata,
         )
 
     def _structured_chat(

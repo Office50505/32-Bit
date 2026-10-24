@@ -137,12 +137,18 @@ imatinib/ABL1 smoke build produced 131 activity records, 131 assay records, and 
 records from 588 KiB of frozen JSON, then sealed a 512 KiB SQLite snapshot. These counts demonstrate
 the pipeline only; they are not the reviewed pilot or evaluation corpus.
 
+Question-scoped molecule identity, formula, molecular-weight, and two-compound comparison requests
+can acquire PubChem PUG REST property records on demand. The first request saves the exact response
+bytes and an atomic manifest under `data/runtime/pubchem-compound-snapshots/`, including the request
+URL, retrieval time, CID, and response SHA-256. Later requests verify and reuse that immutable local
+record instead of calling PubChem again. These structured records may support identity and structure
+answers, but they must never support a biological-activity claim.
+
 The Ollama adapter always validates model output against strict Pydantic contracts and assigns
-structural statement IDs (`S1`, `S2`, ...) deterministically. Its preferred mode sends JSON Schema
-through Ollama's `format` parameter. The currently pinned Qwen/Ollama combination stalls on nested
-array schemas, so its checked-in local configuration explicitly selects Ollama JSON mode and embeds
-the same schema in the prompt. This compatibility mode remains fail-closed on validation errors and
-must be recorded in run provenance; it is not to be described as schema-constrained generation.
+structural statement IDs (`S1`, `S2`, ...) deterministically. It sends compact JSON Schema through
+Ollama's `format` parameter. The model-facing evidence and verdict contracts are deliberately
+bounded for reliable local inference; deterministic validation still evaluates the complete
+retrieved packet and fails closed on an invalid model response.
 
 Each snapshot records the source version and source hash. Sealing computes a deterministic digest
 over canonical snapshot metadata and every normalized source row. FTS rows are derived search data

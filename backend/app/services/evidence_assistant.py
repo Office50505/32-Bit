@@ -10,6 +10,7 @@ from app.models.evidence_assistant import (
     ClaimCheckResponse,
     ClaimDecomposition,
     ConfidenceLevel,
+    ConflictAssessment,
     DecisionReasonCode,
     EvidenceAssistantManifest,
     EvidenceDirectness,
@@ -29,6 +30,8 @@ from app.services.verdict_validation import (
 )
 
 PIPELINE_VERSION = "phase2-orchestrator-v1"
+MAX_MODEL_EVIDENCE_ITEMS = 1
+MAX_MODEL_DISAGREEMENTS = 0
 
 
 def _canonical_json(value: object) -> str:
@@ -113,6 +116,47 @@ def _deterministic_abstention(packet: EvidencePacket) -> VerdictProposal | None:
     )
 
 
+def _compact_model_packet(packet: EvidencePacket) -> EvidencePacket:
+    """Bound local-model context while retaining decisive and representative records."""
+
+    if (
+        len(packet.evidence_items) <= MAX_MODEL_EVIDENCE_ITEMS
+        and len(packet.conflict_assessment.disagreements) <= MAX_MODEL_DISAGREEMENTS
+    ):
+        return packet
+    evidence_by_id = {item.evidence_id: item for item in packet.evidence_items}
+    selected_ids: list[str] = []
+    for disagreement in packet.conflict_assessment.disagreements:
+        for evidence_id in disagreement.evidence_ids:
+            if len(selected_ids) >= MAX_MODEL_EVIDENCE_ITEMS:
+                break
+            if evidence_id not in selected_ids and evidence_id in evidence_by_id:
+                selected_ids.append(evidence_id)
+        if len(selected_ids) >= MAX_MODEL_EVIDENCE_ITEMS:
+            break
+    for item in packet.evidence_items:
+        if len(selected_ids) >= MAX_MODEL_EVIDENCE_ITEMS:
+            break
+        if item.evidence_id not in selected_ids:
+            selected_ids.append(item.evidence_id)
+    selected = set(selected_ids)
+    disagreements = [
+        disagreement
+        for disagreement in packet.conflict_assessment.disagreements
+        if set(disagreement.evidence_ids) <= selected
+    ][:MAX_MODEL_DISAGREEMENTS]
+    return packet.model_copy(
+        update={
+            "evidence_items": [evidence_by_id[evidence_id] for evidence_id in selected_ids],
+            "conflict_assessment": ConflictAssessment(
+                decision_conflict=packet.conflict_assessment.decision_conflict,
+                disagreements=disagreements,
+                summary=packet.conflict_assessment.summary,
+            ),
+        }
+    )
+
+
 class EvidenceAssistant:
     """Fail-closed orchestration around a pinned model and frozen evidence store."""
 
@@ -174,7 +218,9 @@ class EvidenceAssistant:
                 proposal = _deterministic_abstention(packet)
                 if proposal is None:
                     try:
-                        proposed = self._model.propose_verdict(packet).value
+                        proposed = self._model.propose_verdict(
+                            _compact_model_packet(packet)
+                        ).value
                         verdict = materialize_statement_verdict(
                             packet,
                             proposed,
@@ -184,6 +230,9 @@ class EvidenceAssistant:
                         proposal = VerdictProposal(
                             statement_id=packet.statement.statement_id,
                             verdict=Verdict.INSUFFICIENT_EVIDENCE,
+                            citation_ids=[
+                                item.evidence_id for item in packet.evidence_items[:10]
+                            ],
                             reason=(
                                 "The local model output could not be accepted under the "
                                 "deterministic evidence contract, so the system abstained."

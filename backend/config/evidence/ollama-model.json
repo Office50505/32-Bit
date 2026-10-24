@@ -8,6 +8,6 @@
   "temperature": 0,
   "seed": 42,
   "context_length": 8192,
-  "maximum_output_tokens": 512,
-  "structured_output_mode": "json"
+  "maximum_output_tokens": 128,
+  "structured_output_mode": "json_schema"
 }

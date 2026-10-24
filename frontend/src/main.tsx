@@ -6,6 +6,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./styles/global.css";
 import "./styles/refinement.css";
+import "./styles/benzo-assistant.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

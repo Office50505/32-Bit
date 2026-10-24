@@ -24,6 +24,7 @@ backend/.pytest_cache/
 .data/
 data/raw/
 data/processed/
+data/runtime/
 runs/
 uploads/
 tmp/

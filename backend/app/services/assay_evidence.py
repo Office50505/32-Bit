@@ -24,6 +24,7 @@ from app.services.claim_routing import ClaimRoute, ResolvedStatement
 
 EXACT_VALUE_TOLERANCE_FOLD = 3.0
 NUMERIC_DISAGREEMENT_FOLD = 10.0
+MAX_REPORTED_DISAGREEMENTS = 100
 
 _UNIT_TO_MOLAR = {
     "m": 1.0,
@@ -280,7 +281,7 @@ def activity_row_to_evidence(
             "target_confidence_score": target_confidence,
         }
     )
-    source_label = "CHEMBL36" if source_type == EvidenceSourceType.CHEMBL_ACTIVITY else "PUBCHEM"
+    source_label = "CHEMBL" if source_type == EvidenceSourceType.CHEMBL_ACTIVITY else "PUBCHEM"
     return EvidenceItem(
         evidence_id=f"{snapshot_id}:{source_label}:ACTIVITY:{row['activity_id']}",
         source_type=source_type,
@@ -337,7 +338,7 @@ def assess_assay_conflicts(items: list[EvidenceItem]) -> ConflictAssessment:
         and item.directness == EvidenceDirectness.DIRECT
         and item.retraction_status != RetractionStatus.RETRACTED
     ]
-    disagreements: list[AssayDisagreement] = []
+    all_disagreements: list[AssayDisagreement] = []
     for index, left in enumerate(eligible):
         for right in eligible[index + 1 :]:
             if (
@@ -381,7 +382,7 @@ def assess_assay_conflicts(items: list[EvidenceItem]) -> ConflictAssessment:
                 if fold_difference is not None
                 else ""
             )
-            disagreements.append(
+            all_disagreements.append(
                 AssayDisagreement(
                     evidence_ids=[left.evidence_id, right.evidence_id],
                     kind=kind,
@@ -397,20 +398,52 @@ def assess_assay_conflicts(items: list[EvidenceItem]) -> ConflictAssessment:
     decision_conflict = any(
         disagreement.comparable
         and disagreement.kind == AssayDisagreementKind.DIRECT_STANCE_CONFLICT
-        for disagreement in disagreements
+        for disagreement in all_disagreements
     )
-    if not disagreements:
+    all_disagreements.sort(key=_disagreement_sort_key)
+    disagreements = all_disagreements[:MAX_REPORTED_DISAGREEMENTS]
+    if not all_disagreements:
         summary = None
     else:
-        comparable_count = sum(disagreement.comparable for disagreement in disagreements)
+        comparable_count = sum(
+            disagreement.comparable for disagreement in all_disagreements
+        )
+        omitted_count = len(all_disagreements) - len(disagreements)
+        omitted_note = (
+            f" The response shows the {len(disagreements)} highest-priority comparisons "
+            f"and omits {omitted_count}."
+            if omitted_count
+            else ""
+        )
         summary = (
-            f"Found {len(disagreements)} assay disagreement(s); "
-            f"{comparable_count} are directly comparable."
+            f"Found {len(all_disagreements)} assay disagreement(s); "
+            f"{comparable_count} are directly comparable.{omitted_note}"
         )
     return ConflictAssessment(
         decision_conflict=decision_conflict,
         disagreements=disagreements,
         summary=summary,
+    )
+
+
+def _disagreement_sort_key(
+    disagreement: AssayDisagreement,
+) -> tuple[int, float, tuple[str, ...]]:
+    if (
+        disagreement.comparable
+        and disagreement.kind == AssayDisagreementKind.DIRECT_STANCE_CONFLICT
+    ):
+        priority = 0
+    elif disagreement.comparable:
+        priority = 1
+    elif disagreement.kind == AssayDisagreementKind.CONTEXTUAL_STANCE_DIFFERENCE:
+        priority = 2
+    else:
+        priority = 3
+    return (
+        priority,
+        -(disagreement.fold_difference or 1.0),
+        tuple(disagreement.evidence_ids),
     )
 
 

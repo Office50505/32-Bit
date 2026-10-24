@@ -188,7 +188,7 @@ def test_packet_builder_creates_traceable_assay_citation(store: EvidenceStore) -
     packet = build_packet(store)
     assert len(packet.evidence_items) == 1
     item = packet.evidence_items[0]
-    assert item.evidence_id == f"{SNAPSHOT_ID}:CHEMBL36:ACTIVITY:ACT-1"
+    assert item.evidence_id == f"{SNAPSHOT_ID}:CHEMBL:ACTIVITY:ACT-1"
     assert item.source_record_id == "ACT-1"
     assert item.stance == EvidenceStance.SUPPORTS
     assert item.value == 42
@@ -232,6 +232,29 @@ def test_context_difference_is_reported_without_false_direct_conflict(
     disagreement = packet.conflict_assessment.disagreements[0]
     assert disagreement.kind == AssayDisagreementKind.CONTEXTUAL_STANCE_DIFFERENCE
     assert disagreement.differing_dimensions == ["cell_line"]
+
+
+def test_large_assay_sets_rank_and_cap_reported_disagreements(
+    store: EvidenceStore,
+) -> None:
+    for index in range(50):
+        add_activity(
+            store,
+            suffix=f"large-{index:02d}",
+            value=1 if index % 2 == 0 else 100,
+            unit="nM" if index % 2 == 0 else "uM",
+        )
+    packet = build_packet(store)
+    conflict = packet.conflict_assessment
+    assert conflict.decision_conflict
+    assert len(conflict.disagreements) == 100
+    assert all(
+        disagreement.kind == AssayDisagreementKind.DIRECT_STANCE_CONFLICT
+        for disagreement in conflict.disagreements
+    )
+    assert conflict.summary is not None
+    assert "Found 625 assay disagreement(s)" in conflict.summary
+    assert "omits 525" in conflict.summary
 
 
 def test_low_target_confidence_is_indirect_and_flagged(store: EvidenceStore) -> None:
