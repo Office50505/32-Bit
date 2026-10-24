@@ -3,8 +3,8 @@
 **Contract status:** initial implementation contract; scientific-review approval is pending.  
 **Scope:** typed claim decomposition, evidence packets, deterministic verdict validation, and
 research-aid output labelling.  
-**Non-goal in this increment:** live ChEMBL/PubChem ingestion, passage retrieval, Ollama calls,
-confidence calibration, and the 150-claim evaluation.
+**Non-goal in this increment:** live ChEMBL/PubChem ingestion, dense passage retrieval, Ollama
+calls, confidence calibration, and the 150-claim evaluation.
 
 ## 1. Authority boundary
 
@@ -69,12 +69,24 @@ hash, configuration hash, and output hash. Evidence items carry a stable evidenc
 ID, snapshot ID, raw-record hash, source type, experimental/computed basis, directness, stance, and
 retraction status.
 
-## 7. Next implementation gate
+## 7. SQLite snapshot boundary
+
+The initial evidence store is a versioned SQLite database with normalized molecule, target, assay,
+activity, paper, passage, retraction, run-record, and evidence-item tables. SQLite FTS5 supplies the
+lexical passage index. Snapshot construction is writable; claim checking opens the completed file
+in read-only, immutable mode.
+
+Each snapshot records the source version and source hash. Sealing computes a deterministic digest
+over canonical snapshot metadata and every normalized source row. FTS rows are derived search data
+and are therefore excluded from that content digest. A sealed snapshot rejects further builder
+writes, and runtime startup can verify its digest before serving claims.
+
+## 8. Next implementation gate
 
 Before an API endpoint is exposed, the project must add:
 
-1. frozen snapshot metadata and SQLite migrations;
-2. molecule and target resolution with explicit ambiguity stops;
+1. ChEMBL 36 and selected PubChem/PMC import adapters that preserve raw records;
+2. higher-level molecule and target resolution with explicit ambiguity stops;
 3. an Ollama structured-output adapter pinned to the local Qwen digest;
 4. a deterministic confidence implementation backed by benchmark calibration; and
-5. integration tests proving that retrieved citations resolve to the frozen snapshot.
+5. integration tests proving that retrieved citations resolve to the sealed pilot snapshot.
