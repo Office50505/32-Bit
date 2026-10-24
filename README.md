@@ -36,12 +36,12 @@ ProvenanceLab makes those uncertainties visible. It keeps the submitted input se
 
 ## Project status
 
-ProvenanceLab is a working **SMILES-analysis prototype**, not a finished production service. The interface no longer simulates features that are not implemented.
+ProvenanceLab is a working **SMILES-analysis prototype**, not a finished production service. The frontend opens with three clearly labeled demonstration records. Their structures, descriptors, and small bootstrap reference set are illustrative; demo manifests deliberately contain no invented RDKit version or hashes. Student-entered SMILES are sent to the FastAPI/RDKit service only after confirmation.
 
 | Capability | Status | Current behavior |
 | --- | :---: | --- |
 | Direct SMILES input | ✅ Working | Accepts student-entered SMILES and preserves the submitted text |
-| Photo or screenshot source | ✅ Working | Preserves a local image preview and SHA-256 metadata while the student confirms a manual SMILES transcription |
+| Photo or screenshot source | ✅ Working | Previews a local image in the current page and sends its SHA-256 metadata with a confirmed manual SMILES transcription; the file itself stays in the browser |
 | Validation and explanatory errors | ✅ Working | Returns structured codes, explanations, locations, consequences, and next steps |
 | Ambiguity detection | ✅ Working | Flags unassigned stereochemistry without inventing a configuration |
 | Molecular visualization | ✅ Working | Generates an RDKit SVG depiction and highlights affected atoms when available |
